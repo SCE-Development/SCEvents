@@ -1,37 +1,25 @@
 package main
 
 import (
-	"context"
+	"log"
 	"net/http"
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 
-	// "github.com/SCE-Development/SCEvents/pkg/types"
+	"github.com/SCE-Development/SCEvents/pkg/db"
 )
 
-var mongoClient *mongo.Client
-var mongoDB *mongo.Database
-
 func main() {
-	uri := os.Getenv("MONGO_URI")
-	if uri == "" {
-		uri = "mongodb://localhost:27017"
-	}
-
-	ctx := context.Background()
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-	if err != nil {
-		panic(err)
+	mongoURI := os.Getenv("MONGO_URI")
+	if err := db.Connect(mongoURI); err != nil {
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
 	defer func() {
-		_ = client.Disconnect(ctx)
+		if err := db.Disconnect(); err != nil {
+			log.Printf("Error disconnecting MongoDB: %v", err)
+		}
 	}()
-
-	mongoClient = client
-	mongoDB = client.Database("scevents")
 
 	r := gin.Default()
 

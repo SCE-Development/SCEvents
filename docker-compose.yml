@@ -4,14 +4,14 @@ services:
     ports:
       - "8100:27017"
     volumes:
-      - ./data:/data/db
+      - ./data:/data/db/mongo
 
   server:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8101:8080"
+      - "8080:8080"
     depends_on:
       - mongodb
     environment:
