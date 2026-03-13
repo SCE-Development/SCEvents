@@ -10,6 +10,13 @@ import (
 	"github.com/SCE-Development/SCEvents/pkg/db"
 )
 
+type Event struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Date        string `json:"date"`
+}
+
 func main() {
 	mongoURI := os.Getenv("MONGO_URI")
 	if err := db.Connect(mongoURI); err != nil {
@@ -28,6 +35,24 @@ func main() {
 			"message": "response",
 		})
 	})
+
+	r.POST("/events", func(c *gin.Context) {
+	var event Event
+
+	// parse JSON request body into struct
+	if err := c.BindJSON(&event); err != nil {
+		c.JSON(400, gin.H{
+			"error": "invalid JSON payload",
+		})
+		return
+	}
+
+	// pretend we saved it to a database
+	c.JSON(201, gin.H{
+		"message": "event created",
+		"event":   event,
+	})
+})
 
 	r.Run()
 }
