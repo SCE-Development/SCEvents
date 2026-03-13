@@ -1,7 +1,18 @@
 services:
+  mongodb:
+    image: mongo
+    ports:
+      - "8100:27017"
+    volumes:
+      - ./data:/data/db/mongo
+
   server:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URI=mongodb://mongodb:8101
