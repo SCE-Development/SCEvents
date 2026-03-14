@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
+	"github.com/SCE-Development/SCEvents/pkg/handlers"
 )
 
 func main() {
@@ -28,6 +29,11 @@ func main() {
 			"message": "response",
 		})
 	})
+
+	events := r.Group("/events")
+	{
+		events.POST("/", handlers.CreateEvent)
+	}
 
 	r.Run()
 }
