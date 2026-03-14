@@ -30,10 +30,9 @@ func main() {
 		})
 	})
 
-	r.GET("/events", handlers.GetEventsHandler)
-	
 	events := r.Group("/events")
 	{
+		events.GET("/", handlers.GetEventsHandler)
 		events.POST("/", handlers.CreateEvent)
 	}
 
