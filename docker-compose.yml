@@ -15,4 +15,4 @@ services:
     depends_on:
       - mongodb
     environment:
-      - MONGO_URI=mongodb://mongodb:8101
+      - MONGO_URI=mongodb://mongodb:27017

@@ -32,5 +32,10 @@ func main() {
 
 	r.GET("/events", handlers.GetEventsHandler)
 	
+	events := r.Group("/events")
+	{
+		events.POST("/", handlers.CreateEvent)
+	}
+
 	r.Run()
 }
