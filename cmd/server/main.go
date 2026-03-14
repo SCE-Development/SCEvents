@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
+	"github.com/SCE-Development/SCEvents/pkg/handlers"
 )
 
 func main() {
@@ -29,5 +30,7 @@ func main() {
 		})
 	})
 
+	r.GET("/events", handlers.GetEventsHandler)
+	
 	r.Run()
 }
