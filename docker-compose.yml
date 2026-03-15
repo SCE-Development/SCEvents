@@ -12,7 +12,7 @@ services:
       - "8101:6379"
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - ./data/redis:/data 
+      - ./data:/data/db/redis
 
   server:
     build:

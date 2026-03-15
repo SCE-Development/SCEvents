@@ -9,23 +9,26 @@ import (
 
 var (
 	redisClient *redis.Client
-	
 )
-
 
 
 // Connect initializes the global Redis client using the provided address.
 
 func ConnectRedis(addr string) error {
-	if addr == "" {
-		addr = os.Getenv("REDIS_ADDR")
-	}
-
 	redisClient = redis.NewClient(&redis.Options{
 		Addr: addr,
-		password: "", 
+		Password: "", 
 		DB: 0, 
 	})
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// Test the connection with a ping
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		_ = redisClient.Close()
+		redisClient = nil
+		return fmt.Errorf("unable to reach redis at %s: %w", addr, err)
+	}
 	return nil
 }
 
@@ -34,9 +37,6 @@ func DisconnectRedis() error {
 	if redisClient == nil {
 		return nil
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 
 	err := redisClient.Close()
 	redisClient = nil
