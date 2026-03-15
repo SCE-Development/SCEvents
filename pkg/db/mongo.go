@@ -67,3 +67,6 @@ func Database() *mongo.Database {
 	return database
 }
 
+func GetEventsCollection() *mongo.Collection {
+	return Database().Collection("events")
+}
