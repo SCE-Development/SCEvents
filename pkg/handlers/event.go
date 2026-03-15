@@ -8,8 +8,20 @@ import (
 	"github.com/SCE-Development/SCEvents/pkg/db"
 )
 
+// returns the MongoDB events collection
+func GetEvents(c *gin.Context) {
+	events, err := db.GetEvents()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch events",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, events)
+}
+
 // returns a single event by ID
-func GetEventByIDHandler(c *gin.Context) {
+func GetEventByID(c *gin.Context) {
 	id := c.Param("id")
 
 	event, err := db.GetEventByID(id) 
