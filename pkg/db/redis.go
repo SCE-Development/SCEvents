@@ -27,7 +27,7 @@ func ConnectRedis(addr string) error {
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		_ = redisClient.Close()
 		redisClient = nil
-		return fmt.Errorf("unable to reach redis at %s: %w", addr, err)
+		return log.Fatalf("Failed to connect to Redis: %v", err)
 	}
 	return nil
 }
