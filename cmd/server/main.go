@@ -22,6 +22,17 @@ func main() {
 		}
 	}()
 
+	// Get Redis address from environment variable
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if err := db.ConnectRedis(redisAddr); err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
+	defer func(){
+		if err := db.DisconnectRedis(); err != nil {
+			log.Printf("Error disconnecting Redis: %v", err)
+		}
+	}()
+
 	r := gin.Default()
 
 	r.GET("/ping", func(c *gin.Context) {
