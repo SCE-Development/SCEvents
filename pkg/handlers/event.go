@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
+	"time"
 
+	"github.com/SCE-Development/SCEvents/pkg/db"
 	types "github.com/SCE-Development/SCEvents/pkg/event"
 	"github.com/gin-gonic/gin"
-	"github.com/SCE-Development/SCEvents/pkg/db"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // returns the MongoDB events collection
@@ -24,7 +27,7 @@ func GetEvents(c *gin.Context) {
 func GetEventByID(c *gin.Context) {
 	id := c.Param("id")
 
-	event, err := db.GetEventByID(id) 
+	event, err := db.GetEventByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -46,7 +49,29 @@ func CreateEvent(c *gin.Context) {
 		return
 	}
 
-	// pretend we saved it to a database
+	// persist the event to MongoDB
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	coll := db.GetEventsCollection()
+	res, err := coll.InsertOne(ctx, event)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to create event",
+		})
+		return
+	}
+
+	// if Mongo generated an ID, reflect it back in the response
+	if event.ID == "" {
+		switch id := res.InsertedID.(type) {
+		case primitive.ObjectID:
+			event.ID = id.Hex()
+		case string:
+			event.ID = id
+		}
+	}
+
 	c.JSON(201, gin.H{
 		"message": "event created",
 		"event":   event,
