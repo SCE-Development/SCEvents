@@ -35,6 +35,7 @@ func main() {
 		events.GET("/", handlers.GetEvents)
 		events.GET("/:id", handlers.GetEventByID)
 		events.POST("/", handlers.CreateEvent)
+		events.DELETE("/:id", handlers.DeleteEventByID)
 	}
 
 	r.Run()
