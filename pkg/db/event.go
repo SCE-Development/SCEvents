@@ -41,3 +41,21 @@ func GetEventByID(id string) (*event.Event, error) {
 
 	return &e, nil
 }
+
+func DeleteEventByID(id string) error {
+	coll := GetEventsCollection()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result, err := coll.DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		return err
+	}
+
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
+}
