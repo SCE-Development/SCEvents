@@ -2,8 +2,9 @@ package db
 
 import (
 	"context"
-	"os"
+	"fmt"
 	"time"
+
 	"github.com/go-redis/redis/v9"
 )
 
@@ -27,7 +28,7 @@ func ConnectRedis(addr string) error {
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		_ = redisClient.Close()
 		redisClient = nil
-		return log.Fatalf("Failed to connect to Redis: %v", err)
+		return fmt.Errorf("failed to connect to Redis: %w", err)
 	}
 	return nil
 }
