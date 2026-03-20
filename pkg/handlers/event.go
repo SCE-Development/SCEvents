@@ -57,3 +57,5 @@ func CreateEvent(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, createdEvent)
 }
+
+
