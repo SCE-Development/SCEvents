@@ -1,14 +1,11 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
-	"time"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	types "github.com/SCE-Development/SCEvents/pkg/event"
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // returns the MongoDB events collection
@@ -50,12 +47,7 @@ func CreateEvent(c *gin.Context) {
 		return
 	}
 
-	// persist the event to MongoDB
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	coll := db.GetEventsCollection()
-	res, err := coll.InsertOne(ctx, event)
+	createdEvent, err := db.CreateEvent(event)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to create event",
@@ -63,15 +55,5 @@ func CreateEvent(c *gin.Context) {
 		return
 	}
 
-	// if Mongo generated an ID, reflect it back in the response
-	if event.ID == "" {
-		switch id := res.InsertedID.(type) {
-		case primitive.ObjectID:
-			event.ID = id.Hex()
-		case string:
-			event.ID = id
-		}
-	}
-
-	c.JSON(http.StatusCreated, event)
+	c.JSON(http.StatusCreated, createdEvent)
 }
