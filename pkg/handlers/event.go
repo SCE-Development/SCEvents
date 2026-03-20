@@ -38,12 +38,13 @@ func GetEventByID(c *gin.Context) {
 	c.JSON(http.StatusOK, event)
 }
 
+// creates a new event
 func CreateEvent(c *gin.Context) {
 	var event types.Event
 
 	// parse JSON request body into struct
 	if err := c.BindJSON(&event); err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid JSON payload",
 		})
 		return
@@ -72,8 +73,5 @@ func CreateEvent(c *gin.Context) {
 		}
 	}
 
-	c.JSON(201, gin.H{
-		"message": "event created",
-		"event":   event,
-	})
+	c.JSON(http.StatusCreated, event)
 }
