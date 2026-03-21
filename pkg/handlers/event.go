@@ -3,9 +3,9 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/SCE-Development/SCEvents/pkg/db"
 	types "github.com/SCE-Development/SCEvents/pkg/event"
 	"github.com/gin-gonic/gin"
-	"github.com/SCE-Development/SCEvents/pkg/db"
 )
 
 // returns the MongoDB events collection
@@ -24,7 +24,7 @@ func GetEvents(c *gin.Context) {
 func GetEventByID(c *gin.Context) {
 	id := c.Param("id")
 
-	event, err := db.GetEventByID(id) 
+	event, err := db.GetEventByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -35,20 +35,27 @@ func GetEventByID(c *gin.Context) {
 	c.JSON(http.StatusOK, event)
 }
 
+// creates a new event
 func CreateEvent(c *gin.Context) {
 	var event types.Event
 
 	// parse JSON request body into struct
 	if err := c.BindJSON(&event); err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid JSON payload",
 		})
 		return
 	}
 
-	// pretend we saved it to a database
-	c.JSON(201, gin.H{
-		"message": "event created",
-		"event":   event,
-	})
+	createdEvent, err := db.CreateEvent(event)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to create event",
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, createdEvent)
 }
+
+
