@@ -5,11 +5,14 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	"github.com/SCE-Development/SCEvents/pkg/handlers"
 )
+
+const clientURL = "http://localhost:3000"
 
 func main() {
 	mongoURI := os.Getenv("MONGO_URI")
@@ -34,6 +37,12 @@ func main() {
 	}()
 
 	r := gin.Default()
+
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{clientURL}
+	config.AllowCredentials = true
+	config.AddAllowHeaders("Authorization")
+	r.Use(cors.New(config))
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

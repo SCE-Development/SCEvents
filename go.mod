@@ -4,6 +4,8 @@ go 1.25.5
 
 require (
 	github.com/gin-gonic/gin v1.12.0
+	github.com/redis/go-redis/v9 v9.7.0
+	github.com/gin-contrib/cors v1.4.0
 	go.mongodb.org/mongo-driver v1.17.9
 )
 
