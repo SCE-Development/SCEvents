@@ -20,7 +20,7 @@ func GetEvents() ([]event.Event, error) {
 	}
 	defer cursor.Close(ctx)
 
-	var events []event.Event
+	events := make([]event.Event, 0)
 	if err := cursor.All(ctx, &events); err != nil {
 		return nil, err
 	}
