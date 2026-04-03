@@ -3,7 +3,6 @@ services:
     image: mongo
     ports:
       - "8100:27017"
-    # Official image uses /data/db; avoid mounting ./data under /data/db/mongo (loops with Redis under ./data/db/...).
     volumes:
       - ./data/mongo:/data/db
 
