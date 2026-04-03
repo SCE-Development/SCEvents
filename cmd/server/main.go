@@ -58,5 +58,5 @@ func main() {
 		events.DELETE("/:id", handlers.DeleteEventByID)
 	}
 
-	r.Run()
+	r.Run(":8002")
 }
