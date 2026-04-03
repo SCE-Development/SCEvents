@@ -4,7 +4,7 @@ services:
     ports:
       - "8100:27017"
     volumes:
-      - ./data:/data/db/mongo
+      - ./data/mongo:/data/db
 
   redis:
     image: redis
@@ -12,7 +12,7 @@ services:
       - "8101:6379"
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - ./data/db/redis:/data
+      - ./data/redis:/data
 
   server:
     build:
