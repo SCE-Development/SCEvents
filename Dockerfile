@@ -18,6 +18,6 @@ WORKDIR /app
 
 COPY --from=build /app/scevents ./
 
-EXPOSE 8080
+EXPOSE 8002
 
 CMD ["./scevents"]
