@@ -58,4 +58,21 @@ func CreateEvent(c *gin.Context) {
 	c.JSON(http.StatusCreated, createdEvent)
 }
 
+// deletes an event by ID
+func DeleteEventByID(c *gin.Context) {
+	id := c.Param("id")
+
+	err := db.DeleteEventByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "event not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "event deleted successfully",
+	})
+}
+
 
