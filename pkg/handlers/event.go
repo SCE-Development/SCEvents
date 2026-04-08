@@ -55,6 +55,13 @@ func CreateEvent(c *gin.Context) {
 		return
 	}
 
+	if err := db.SetEventHeadcount(createdEvent.ID, createdEvent.MaxAttendees); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to store event headcount",
+		})
+		return
+	}
+
 	c.JSON(http.StatusCreated, createdEvent)
 }
 

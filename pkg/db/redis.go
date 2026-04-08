@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-redis/redis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -50,4 +50,17 @@ func RedisClient() *redis.Client {
 	return redisClient
 }
 
+// EventHeadcountKey returns the Redis key for an event's headcount (capacity).
+// Pattern: event:{event_id}:headcount -> value: capacity (integer).
+func EventHeadcountKey(eventID string) string {
+	return fmt.Sprintf("event:%s:headcount", eventID)
+}
 
+func SetEventHeadcount(eventID string, capacity int) error {
+	if redisClient == nil {
+		return fmt.Errorf("redis not connected")
+	}
+	ctx := context.Background()
+	key := EventHeadcountKey(eventID)
+	return redisClient.Set(ctx, key, capacity, 0).Err()
+}
