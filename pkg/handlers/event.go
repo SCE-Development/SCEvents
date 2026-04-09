@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
-	types "github.com/SCE-Development/SCEvents/pkg/event"
+	event "github.com/SCE-Development/SCEvents/pkg/event"
 	"github.com/gin-gonic/gin"
 )
 
@@ -37,7 +37,7 @@ func GetEventByID(c *gin.Context) {
 
 // creates a new event
 func CreateEvent(c *gin.Context) {
-	var event types.Event
+	var event event.Event
 
 	// parse JSON request body into struct
 	if err := c.BindJSON(&event); err != nil {
@@ -81,5 +81,3 @@ func DeleteEventByID(c *gin.Context) {
 		"message": "event deleted successfully",
 	})
 }
-
-
