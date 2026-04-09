@@ -1,4 +1,4 @@
-package types
+package event
 
 type AnswerDetails struct {
 	MaxChars int `bson:"max_chars,omitempty" json:"max_chars,omitempty"`
