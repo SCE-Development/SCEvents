@@ -78,3 +78,57 @@ func GetEventHeadcount(eventID string) (int, error) {
 	}
 	return val, nil
 }
+
+var takeSeatScript = redis.NewScript(`
+local current = redis.call("GET", KEYS[1])
+if not current then
+	return -2
+end
+
+current = tonumber(current)
+if current <= 0 then
+	return 0
+end
+
+redis.call("DECR", KEYS[1])
+return 1
+`)
+
+// TryTakeEventSeat atomically checks whether the event has remaining capacity
+// and decrements it by 1 only if capacity is available.
+func TryTakeEventSeat(eventID string) (bool, error) {
+	if redisClient == nil {
+		return false, fmt.Errorf("redis not connected")
+	}
+
+	ctx := context.Background()
+	key := EventHeadcountKey(eventID)
+
+	result, err := takeSeatScript.Run(ctx, redisClient, []string{key}).Int()
+	if err != nil {
+		return false, err
+	}
+
+	switch result {
+	case 1:
+		return true, nil
+	case 0:
+		return false, nil
+	case -2:
+		return false, fmt.Errorf("missing Redis headcount for event %s", eventID)
+	default:
+		return false, fmt.Errorf("unexpected Redis script result: %d", result)
+	}
+}
+
+// ReleaseEventSeat adds 1 back to the remaining capacity.
+func ReleaseEventSeat(eventID string) error {
+	if redisClient == nil {
+		return fmt.Errorf("redis not connected")
+	}
+
+	ctx := context.Background()
+	key := EventHeadcountKey(eventID)
+
+	return redisClient.Incr(ctx, key).Err()
+}

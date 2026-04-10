@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	"github.com/SCE-Development/SCEvents/pkg/handlers"
+	"github.com/SCE-Development/SCEvents/pkg/registration"
 )
 
 const clientURL = "http://localhost:3000"
@@ -36,6 +38,21 @@ func main() {
 		}
 	}()
 
+	kafkaBroker := os.Getenv("KAFKA_BROKER")
+	kafkaTopic := os.Getenv("KAFKA_TOPIC")
+	kafkaGroupID := os.Getenv("KAFKA_GROUP_ID")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	consumer := registration.NewConsumer(
+		[]string{kafkaBroker},
+		kafkaTopic,
+		kafkaGroupID,
+	)
+	
+	go consumer.Run(ctx)
+	
 	r := gin.Default()
 
 	config := cors.DefaultConfig()

@@ -32,6 +32,9 @@ services:
     environment:
       - MONGO_URI=mongodb://mongodb:27017
       - REDIS_ADDR=redis:6379
+      - KAFKA_BROKER=kafka:29092
+      - KAFKA_TOPIC=registrations
+      - KAFKA_GROUP_ID=registration-consumers
 
   kafka:
     image: apache/kafka:3.8.0
