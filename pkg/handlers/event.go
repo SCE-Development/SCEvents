@@ -81,3 +81,29 @@ func DeleteEventByID(c *gin.Context) {
 		"message": "event deleted successfully",
 	})
 }
+
+func UpdateEventByID(c *gin.Context) {
+	id := c.Param("id")
+
+	var event event.Event
+
+	// parse JSON request body into struct
+	if err := c.BindJSON(&event); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid JSON payload",
+		})
+		return
+	}
+
+	err := db.UpdateEventByID(id, event)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "event not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "event updated successfully",
+	})
+}

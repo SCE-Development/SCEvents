@@ -86,3 +86,37 @@ func DeleteEventByID(id string) error {
 
 	return nil
 }
+
+func UpdateEventByID(id string, e event.Event) error {
+	coll := GetEventsCollection()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Convert the event struct to a map for $set update
+	// We want to avoid overwriting _id and created_at if they are not intended to be changed
+	update := bson.M{
+		"$set": bson.M{
+			"name":              e.Name,
+			"date":              e.Date,
+			"time":              e.Time,
+			"location":          e.Location,
+			"description":       e.Description,
+			"admins":            e.Admins,
+			"registration_form": e.RegistrationForm,
+			"max_attendees":     e.MaxAttendees,
+			"status":            e.Status,
+		},
+	}
+
+	result, err := coll.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
+}
