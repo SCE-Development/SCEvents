@@ -108,14 +108,7 @@ func UpdateEventByID(c *gin.Context) {
 	}
 
 	// Check if user is an admin of this event
-	isAdmin := false
-	for _, admin := range existingEvent.Admins {
-		if admin == userID {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
+	if !existingEvent.IsAdmin(userID) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": "you are not an admin of this event",
 		})
@@ -132,9 +125,7 @@ func UpdateEventByID(c *gin.Context) {
 	}
 
 	// Strip immutable fields that should not be overwritten
-	delete(fields, "id")
-	delete(fields, "_id")
-	delete(fields, "created_at")
+	event.SanitizeUpdateFields(fields)
 
 	if len(fields) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
