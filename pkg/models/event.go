@@ -22,7 +22,8 @@ type FormQuestion struct {
 type Event struct {
 	ID               string         `bson:"_id" json:"id"`
 	Name             string         `bson:"name" json:"name"`
-	Date             string         `bson:"date" json:"date"`
+	Date             string         `bson:"date" json:"date"` 
+	EndDate          string         `bson:"end_date,omitempty" json:"end_date,omitempty"`
 	Time             string         `bson:"time" json:"time"`
 	Location         string         `bson:"location" json:"location"`
 	Description      string         `bson:"description" json:"description"`
