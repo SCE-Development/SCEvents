@@ -30,3 +30,21 @@ type Event struct {
 	CreatedAt        string         `bson:"created_at" json:"created_at"`
 	Status           string         `bson:"status" json:"status"` // draft, published, closed
 }
+
+// IsAdmin checks if the given userID is in the event's Admins list.
+func (e *Event) IsAdmin(userID string) bool {
+	for _, admin := range e.Admins {
+		if admin == userID {
+			return true
+		}
+	}
+	return false
+}
+
+// SanitizeUpdateFields removes immutable fields from an update map
+// to prevent them from being overwritten.
+func SanitizeUpdateFields(fields map[string]interface{}) {
+	delete(fields, "id")
+	delete(fields, "_id")
+	delete(fields, "created_at")
+}
