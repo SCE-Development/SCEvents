@@ -157,6 +157,18 @@ func UpdateEventByID(c *gin.Context) {
 		return
 	}
 
+	// If max_attendees was updated, sync the headcount in Redis
+	if maxAttendees, ok := fields["max_attendees"]; ok {
+		if val, ok := maxAttendees.(float64); ok {
+			if err := db.SetEventHeadcount(id, int(val)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": "event updated but failed to sync headcount in Redis",
+				})
+				return
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "event updated successfully",
 	})
