@@ -148,6 +148,35 @@ func UpdateEventByID(c *gin.Context) {
 		return
 	}
 
+	// If max_attendees was updated, sync the headcount in Redis
+	// accounting for seats already given out
+	if maxAttendees, ok := fields["max_attendees"]; ok {
+		if newMax, ok := maxAttendees.(float64); ok {
+			// Get current remaining seats from Redis
+			currentRemaining, err := db.GetEventHeadcount(id)
+			if err != nil {
+				// If Redis key doesn't exist yet, no seats have been taken
+				currentRemaining = existingEvent.MaxAttendees
+			}
+
+			// Calculate how many seats have already been given out
+			seatsTaken := existingEvent.MaxAttendees - currentRemaining
+
+			// Set the new headcount: new max minus seats already taken
+			newRemaining := int(newMax) - seatsTaken
+			if newRemaining < 0 {
+				newRemaining = 0
+			}
+
+			if err := db.SetEventHeadcount(id, newRemaining); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": "event updated but failed to sync headcount in Redis",
+				})
+				return
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "event updated successfully",
 	})

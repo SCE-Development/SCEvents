@@ -64,3 +64,17 @@ func SetEventHeadcount(eventID string, capacity int) error {
 	key := EventHeadcountKey(eventID)
 	return redisClient.Set(ctx, key, capacity, 0).Err()
 }
+
+// GetEventHeadcount returns the current remaining headcount for an event from Redis.
+func GetEventHeadcount(eventID string) (int, error) {
+	if redisClient == nil {
+		return 0, fmt.Errorf("redis not connected")
+	}
+	ctx := context.Background()
+	key := EventHeadcountKey(eventID)
+	val, err := redisClient.Get(ctx, key).Int()
+	if err != nil {
+		return 0, err
+	}
+	return val, nil
+}
