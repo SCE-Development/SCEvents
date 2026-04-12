@@ -6,6 +6,7 @@ import (
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	event "github.com/SCE-Development/SCEvents/pkg/event"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // returns the MongoDB events collection
@@ -79,5 +80,75 @@ func DeleteEventByID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "event deleted successfully",
+	})
+}
+
+// updates an event by ID (partial update)
+func UpdateEventByID(c *gin.Context) {
+	id := c.Param("id")
+
+	// Basic event-admin auth check:
+	// The caller must pass their user_id as a query parameter.
+	// We verify they are listed in the event's Admins before allowing the update.
+	userID := c.Query("user_id")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "missing user_id query parameter",
+		})
+		return
+	}
+
+	// Fetch the existing event to verify admin access
+	existingEvent, err := db.GetEventByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "event not found",
+		})
+		return
+	}
+
+	// Check if user is an admin of this event
+	if !existingEvent.IsAdmin(userID) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "you are not an admin of this event",
+		})
+		return
+	}
+
+	// Bind request body to a map for partial update
+	var fields map[string]interface{}
+	if err := c.BindJSON(&fields); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid JSON payload",
+		})
+		return
+	}
+
+	// Strip immutable fields that should not be overwritten
+	event.SanitizeUpdateFields(fields)
+
+	if len(fields) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "no updatable fields provided",
+		})
+		return
+	}
+
+	err = db.UpdateEventByID(id, fields)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "event not found",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to update event",
+			})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "event updated successfully",
 	})
 }

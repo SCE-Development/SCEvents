@@ -56,6 +56,7 @@ func main() {
 		events.GET("/:id", handlers.GetEventByID)
 		events.POST("/", handlers.CreateEvent)
 		events.DELETE("/:id", handlers.DeleteEventByID)
+		events.PATCH("/:id", handlers.UpdateEventByID)
 	}
 
 	r.Run(":8002")

@@ -86,3 +86,27 @@ func DeleteEventByID(id string) error {
 
 	return nil
 }
+
+// UpdateEventByID performs a partial update on an event document.
+// Only fields present in the provided map are updated via $set.
+func UpdateEventByID(id string, fields map[string]interface{}) error {
+	coll := GetEventsCollection()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	update := bson.M{
+		"$set": fields,
+	}
+
+	result, err := coll.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
+}
