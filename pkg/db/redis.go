@@ -56,6 +56,10 @@ func EventHeadcountKey(eventID string) string {
 	return fmt.Sprintf("event:%s:headcount", eventID)
 }
 
+func EventRegistrantsKey(eventID string) string {
+	return fmt.Sprintf("event:%s:registrants", eventID)
+}
+
 func SetEventHeadcount(eventID string, capacity int) error {
 	if redisClient == nil {
 		return fmt.Errorf("redis not connected")
@@ -131,4 +135,17 @@ func ReleaseEventSeat(eventID string) error {
 	key := EventHeadcountKey(eventID)
 
 	return redisClient.Incr(ctx, key).Err()
+}
+
+func IsUserRegisteredForEvent(eventID string, userID string) (bool, error) {
+	if redisClient == nil {
+		return false, fmt.Errorf("redis not connected")
+	}
+	ctx := context.Background()
+	key := EventRegistrantsKey(eventID)
+	isMember, err := redisClient.SIsMember(ctx, key, userID).Result()
+	if err != nil {
+		return false, err
+	}
+	return isMember, nil
 }

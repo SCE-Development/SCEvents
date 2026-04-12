@@ -72,6 +72,7 @@ func main() {
 		events.GET("/", handlers.GetEvents)
 		events.GET("/:id", handlers.GetEventByID)
 		events.POST("/", handlers.CreateEvent)
+		events.POST("/:id/register", handlers.RegisterForEvent)
 		events.DELETE("/:id", handlers.DeleteEventByID)
 		events.PATCH("/:id", handlers.UpdateEventByID)
 	}

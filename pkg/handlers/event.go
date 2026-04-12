@@ -1,8 +1,9 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
-
+	"strings"
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	event "github.com/SCE-Development/SCEvents/pkg/event"
 	"github.com/gin-gonic/gin"
@@ -179,5 +180,72 @@ func UpdateEventByID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "event updated successfully",
+	})
+}
+
+func RegisterForEvent(c *gin.Context) {
+	eventID := c.Param("id")
+	if eventID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "event id is required",
+		})
+		return
+	}
+
+	var payload event.RegistrationPayload
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid JSON payload",
+		})
+		return
+	}
+
+	if strings.TrimSpace(payload.Registrant.UserID) == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "login required to register for event",
+		})
+		return
+	}
+
+	alreadyRegistered, err := db.IsUserRegisteredForEvent(eventID, payload.Registrant.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to verify existing registration",
+		})
+		return
+	}
+	if alreadyRegistered {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "user is already registered for this event",
+		})
+		return
+	}
+
+	ev, err := db.GetEventByID(eventID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "event not found",
+		})
+		return
+	}
+
+	if err := ev.ValidateRegistration(payload.RegistrationFormAnswers); err != nil {
+		var formErr *event.RegistrationFormValidationError
+		if errors.As(err, &formErr) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": formErr.Message,
+				"field": formErr.Field,
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to validate registration",
+		})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"message":  "registration request sent",
+		"event_id": eventID,
 	})
 }
