@@ -4,21 +4,20 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
+	"github.com/SCE-Development/SCEvents/internal/config"
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	"github.com/SCE-Development/SCEvents/pkg/handlers"
 	"github.com/SCE-Development/SCEvents/pkg/registration"
 )
 
-const clientURL = "http://localhost:3000"
-
 func main() {
-	mongoURI := os.Getenv("MONGO_URI")
-	if err := db.Connect(mongoURI); err != nil {
+	cfg := config.Load()
+
+	if err := db.Connect(cfg.MongoURI); err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
 	defer func() {
@@ -27,9 +26,7 @@ func main() {
 		}
 	}()
 
-	// Get Redis address from environment variable
-	redisAddr := os.Getenv("REDIS_ADDR")
-	if err := db.ConnectRedis(redisAddr); err != nil {
+	if err := db.ConnectRedis(cfg.RedisAddr); err != nil {
 		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
 	defer func(){
@@ -38,17 +35,13 @@ func main() {
 		}
 	}()
 
-	kafkaBroker := os.Getenv("KAFKA_BROKER")
-	kafkaTopic := os.Getenv("KAFKA_TOPIC")
-	kafkaGroupID := os.Getenv("KAFKA_GROUP_ID")
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	consumer := registration.NewConsumer(
-		[]string{kafkaBroker},
-		kafkaTopic,
-		kafkaGroupID,
+		[]string{cfg.KafkaBroker},
+		cfg.KafkaTopic,
+		cfg.KafkaGroupID,
 	)
 	
 	go consumer.Run(ctx)
@@ -56,7 +49,7 @@ func main() {
 	r := gin.Default()
 
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{clientURL}
+	config.AllowOrigins = []string{cfg.ClientURL}
 	config.AllowCredentials = true
 	config.AddAllowHeaders("Authorization")
 	r.Use(cors.New(config))
@@ -77,5 +70,7 @@ func main() {
 		events.PATCH("/:id", handlers.UpdateEventByID)
 	}
 
-	r.Run(":8002")
+	if err := r.Run(":" + cfg.ServerPort); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }

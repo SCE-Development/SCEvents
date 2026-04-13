@@ -35,6 +35,8 @@ services:
       - KAFKA_BROKER=kafka:29092
       - KAFKA_TOPIC=registrations
       - KAFKA_GROUP_ID=registration-consumers
+      - SERVER_PORT=8002
+      - CLIENT_URL=http://localhost:3000
 
   kafka:
     image: apache/kafka:3.8.0
