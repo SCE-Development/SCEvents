@@ -10,11 +10,34 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func GetEvents() ([]models.Event, error) {
+// GetEvents returns events overlapping [startDate, endDate] (YYYY-MM-DD strings).
+func GetEvents(startDate, endDate string) ([]models.Event, error) {
 	coll := GetEventsCollection()
 	ctx := context.Background()
 
-	cursor, err := coll.Find(ctx, bson.M{})
+	// date <= endDate and (single-day: date >= startDate else end_date >= startDate).
+	filter := bson.M{
+		"$and": bson.A{
+			bson.M{"date": bson.M{"$lte": endDate}},
+			bson.M{
+				"$or": bson.A{
+					bson.M{
+						"$and": bson.A{
+							bson.M{"$or": bson.A{
+								bson.M{"end_date": bson.M{"$exists": false}},
+								bson.M{"end_date": nil},
+								bson.M{"end_date": ""},
+							}},
+							bson.M{"date": bson.M{"$gte": startDate}},
+						},
+					},
+					bson.M{"end_date": bson.M{"$gte": startDate}},
+				},
+			},
+		},
+	}
+
+	cursor, err := coll.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}

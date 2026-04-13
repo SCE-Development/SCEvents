@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	"github.com/SCE-Development/SCEvents/pkg/models"
@@ -11,9 +12,43 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// returns the MongoDB events collection
+const dateLayout = "2006-01-02"
+
+// GetEvents: query startDate & endDate (YYYY-MM-DD), or omit both for current UTC month; one alone is 400.
 func GetEvents(c *gin.Context) {
-	events, err := db.GetEvents()
+	startQ := strings.TrimSpace(c.Query("startDate"))
+	endQ := strings.TrimSpace(c.Query("endDate"))
+
+	var startDate, endDate string
+	switch {
+	case startQ == "" && endQ == "": //default case, current UTC month
+		now := time.Now().UTC()
+		first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		last := first.AddDate(0, 1, -1)
+		startDate = first.Format(dateLayout)
+		endDate = last.Format(dateLayout)
+	case startQ != "" && endQ != "":
+		if _, err := time.Parse(dateLayout, startQ); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid startDate", "expected": dateLayout})
+			return
+		}
+		if _, err := time.Parse(dateLayout, endQ); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid endDate", "expected": dateLayout})
+			return
+		}
+		if startQ > endQ {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "startDate must be on or before endDate"})
+			return
+		}
+		startDate, endDate = startQ, endQ
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "provide both startDate and endDate query params, or neither for the current month default",
+		})
+		return
+	}
+
+	events, err := db.GetEvents(startDate, endDate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to fetch events",
