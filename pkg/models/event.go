@@ -1,4 +1,6 @@
-package event
+package models
+
+import "strings"
 
 type AnswerDetails struct {
 	MaxChars int `bson:"max_chars,omitempty" json:"max_chars,omitempty"`
@@ -31,6 +33,15 @@ type Event struct {
 	Status           string         `bson:"status" json:"status"` // draft, published, closed
 }
 
+type RegistrationFormValidationError struct {
+	Field   string
+	Message string
+}
+
+func (e *RegistrationFormValidationError) Error() string {
+	return e.Message
+}
+
 // IsAdmin checks if the given userID is in the event's Admins list.
 func (e *Event) IsAdmin(userID string) bool {
 	for _, admin := range e.Admins {
@@ -39,6 +50,40 @@ func (e *Event) IsAdmin(userID string) bool {
 		}
 	}
 	return false
+}
+
+func (e *Event) ValidateRegistration(answers map[string]any) error {
+	for _, question := range e.RegistrationForm {
+		if !question.Required {
+			continue
+		}
+
+		answer, exists := answers[question.ID]
+		if !exists {
+			return &RegistrationFormValidationError{
+				Field:   question.ID,
+				Message: "missing required answer",
+			}
+		}
+
+		switch v := answer.(type) {
+		case string:
+			if strings.TrimSpace(v) == "" {
+				return &RegistrationFormValidationError{
+					Field:   question.ID,
+					Message: "required answer cannot be empty",
+				}
+			}
+		case []any:
+			if len(v) == 0 {
+				return &RegistrationFormValidationError{
+					Field:   question.ID,
+					Message: "required answer cannot be empty",
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // SanitizeUpdateFields removes immutable fields from an update map

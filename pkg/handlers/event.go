@@ -4,8 +4,9 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+
 	"github.com/SCE-Development/SCEvents/pkg/db"
-	event "github.com/SCE-Development/SCEvents/pkg/event"
+	"github.com/SCE-Development/SCEvents/pkg/models"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -39,7 +40,7 @@ func GetEventByID(c *gin.Context) {
 
 // creates a new event
 func CreateEvent(c *gin.Context) {
-	var event event.Event
+	var event models.Event
 
 	// parse JSON request body into struct
 	if err := c.BindJSON(&event); err != nil {
@@ -125,8 +126,7 @@ func UpdateEventByID(c *gin.Context) {
 		return
 	}
 
-	// Strip immutable fields that should not be overwritten
-	event.SanitizeUpdateFields(fields)
+	models.SanitizeUpdateFields(fields)
 
 	if len(fields) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -192,7 +192,7 @@ func RegisterForEvent(c *gin.Context) {
 		return
 	}
 
-	var payload event.RegistrationPayload
+	var payload models.RegistrationPayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid JSON payload",
@@ -230,7 +230,7 @@ func RegisterForEvent(c *gin.Context) {
 	}
 
 	if err := ev.ValidateRegistration(payload.RegistrationFormAnswers); err != nil {
-		var formErr *event.RegistrationFormValidationError
+		var formErr *models.RegistrationFormValidationError
 		if errors.As(err, &formErr) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": formErr.Message,

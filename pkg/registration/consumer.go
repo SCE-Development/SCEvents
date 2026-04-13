@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
+	"github.com/SCE-Development/SCEvents/pkg/models"
 	"github.com/segmentio/kafka-go"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -49,7 +50,7 @@ func (c *Consumer) Run(ctx context.Context) {
 }
 
 func ProcessKafkaMessage(raw []byte) error {
-	var msg KafkaRegistrationMessage
+	var msg models.KafkaRegistrationMessage
 	if err := json.Unmarshal(raw, &msg); err != nil {
 		return err
 	}
@@ -63,14 +64,14 @@ func ProcessKafkaMessage(raw []byte) error {
 		return err
 	}
 
-	if req.Status != StatusPending {
+	if req.Status != models.StatusPending {
 		return nil
 	}
 
 	_, err = db.GetEventByID(msg.EventID)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return db.MarkRegistrationRejected(msg.RequestID, ReasonEventNotFound)
+			return db.MarkRegistrationRejected(msg.RequestID, models.ReasonEventNotFound)
 		}
 		return err
 	}
@@ -80,7 +81,7 @@ func ProcessKafkaMessage(raw []byte) error {
 		return err
 	}
 	if duplicate {
-		return db.MarkRegistrationRejected(msg.RequestID, ReasonDuplicateUser)
+		return db.MarkRegistrationRejected(msg.RequestID, models.ReasonDuplicateUser)
 	}
 
 	ok, err := db.TryTakeEventSeat(msg.EventID)
@@ -88,7 +89,7 @@ func ProcessKafkaMessage(raw []byte) error {
 		return err
 	}
 	if !ok {
-		return db.MarkRegistrationRejected(msg.RequestID, ReasonCapacityFull)
+		return db.MarkRegistrationRejected(msg.RequestID, models.ReasonCapacityFull)
 	}
 
 	if err := db.MarkRegistrationAccepted(msg.RequestID); err != nil {
@@ -99,7 +100,7 @@ func ProcessKafkaMessage(raw []byte) error {
 	return nil
 }
 
-func validateKafkaMessage(msg KafkaRegistrationMessage) error {
+func validateKafkaMessage(msg models.KafkaRegistrationMessage) error {
 	if msg.RequestID == "" {
 		return errors.New("missing request_id")
 	}

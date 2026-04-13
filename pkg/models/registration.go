@@ -1,4 +1,4 @@
-package registration
+package models
 
 import "time"
 
@@ -24,14 +24,13 @@ const (
 type Registrant struct {
 	Name   string `bson:"name" json:"name" binding:"required"`
 	Email  string `bson:"email" json:"email" binding:"required,email"`
-	UserID string `bson:"user_id" json:"user_id"`
+	UserID string `bson:"user_id" json:"user_id,omitempty"`
 }
 
-// SubmitRegistrationRequest represents the incoming API payload from the frontend when a user registers for an event
-type SubmitRegistrationRequest struct {
-	Registrant  Registrant     `bson:"registrant" json:"registrant" binding:"required"`
-	Answers     map[string]any `bson:"answers" json:"answers" binding:"required"`
-	SubmittedAt string         `bson:"submitted_at,omitempty" json:"submitted_at,omitempty"`
+type RegistrationPayload struct {
+	Registrant              Registrant     `bson:"registrant" json:"registrant" binding:"required"`
+	RegistrationFormAnswers map[string]any `bson:"registration_form_answers" json:"registration_form_answers" binding:"required"`
+	Timestamp               time.Time      `bson:"timestamp" json:"timestamp"`
 }
 
 // RegistrationRequest is the source-of-truth document representing a user's registration lifecycle (pending to accepted/rejected)

@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
-	event "github.com/SCE-Development/SCEvents/pkg/event"
+	"github.com/SCE-Development/SCEvents/pkg/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func GetEvents() ([]event.Event, error) {
+func GetEvents() ([]models.Event, error) {
 	coll := GetEventsCollection()
 	ctx := context.Background()
 
@@ -20,7 +20,7 @@ func GetEvents() ([]event.Event, error) {
 	}
 	defer cursor.Close(ctx)
 
-	events := make([]event.Event, 0)
+	events := make([]models.Event, 0)
 	if err := cursor.All(ctx, &events); err != nil {
 		return nil, err
 	}
@@ -29,13 +29,13 @@ func GetEvents() ([]event.Event, error) {
 }
 
 // retrieves an event from the database by ID
-func GetEventByID(id string) (*event.Event, error) {
+func GetEventByID(id string) (*models.Event, error) {
 	coll := GetEventsCollection()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var e event.Event
+	var e models.Event
 	err := coll.FindOne(ctx, bson.M{"_id": id}).Decode(&e)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func GetEventByID(id string) (*event.Event, error) {
 }
 
 // creates a new event in the database
-func CreateEvent(e event.Event) (*event.Event, error) {
+func CreateEvent(e models.Event) (*models.Event, error) {
 	coll := GetEventsCollection()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -69,6 +69,7 @@ func CreateEvent(e event.Event) (*event.Event, error) {
 	return &e, nil
 }
 
+// deletes an event by ID
 func DeleteEventByID(id string) error {
 	coll := GetEventsCollection()
 

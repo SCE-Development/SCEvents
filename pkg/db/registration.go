@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/SCE-Development/SCEvents/pkg/registration"
+	"github.com/SCE-Development/SCEvents/pkg/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -14,12 +14,12 @@ func GetRegistrationsCollection() *mongo.Collection {
 }
 
 // CreatePendingRegistration inserts a new registration request with status "pending" before async processing
-func CreatePendingRegistration(r registration.RegistrationRequest) (*registration.RegistrationRequest, error) {
+func CreatePendingRegistration(r models.RegistrationRequest) (*models.RegistrationRequest, error) {
 	coll := GetRegistrationsCollection()
 
 	now := time.Now().UTC()
-	r.Status = registration.StatusPending
-	r.DecisionReason = registration.ReasonNone
+	r.Status = models.StatusPending
+	r.DecisionReason = models.ReasonNone
 	r.CreatedAt = now
 	r.UpdatedAt = now
 	r.ProcessedAt = nil
@@ -36,13 +36,13 @@ func CreatePendingRegistration(r registration.RegistrationRequest) (*registratio
 }
 
 // GetRegistrationByID fetches a registration request by its request_id
-func GetRegistrationByID(requestID string) (*registration.RegistrationRequest, error) {
+func GetRegistrationByID(requestID string) (*models.RegistrationRequest, error) {
 	coll := GetRegistrationsCollection()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var r registration.RegistrationRequest
+	var r models.RegistrationRequest
 	err := coll.FindOne(ctx, bson.M{"_id": requestID}).Decode(&r)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func HasAcceptedRegistration(eventID string, userID string) (bool, error) {
 	filter := bson.M{
 		"event_id":           eventID,
 		"registrant.user_id": userID,
-		"status":             registration.StatusAccepted,
+		"status":             models.StatusAccepted,
 	}
 
 	err := coll.FindOne(ctx, filter).Err()
@@ -86,8 +86,8 @@ func MarkRegistrationAccepted(requestID string) error {
 
 	update := bson.M{
 		"$set": bson.M{
-			"status":          registration.StatusAccepted,
-			"decision_reason": registration.ReasonNone,
+			"status":          models.StatusAccepted,
+			"decision_reason": models.ReasonNone,
 			"updated_at":      now,
 			"processed_at":    now,
 		},
@@ -97,7 +97,7 @@ func MarkRegistrationAccepted(requestID string) error {
 		ctx,
 		bson.M{
 			"_id":    requestID,
-			"status": registration.StatusPending,
+			"status": models.StatusPending,
 		},
 		update,
 	)
@@ -112,7 +112,7 @@ func MarkRegistrationAccepted(requestID string) error {
 }
 
 // MarkRegistrationRejected transitions a pending request to rejected with a reason
-func MarkRegistrationRejected(requestID string, reason registration.DecisionReason) error {
+func MarkRegistrationRejected(requestID string, reason models.DecisionReason) error {
 	coll := GetRegistrationsCollection()
 
 	now := time.Now().UTC()
@@ -122,7 +122,7 @@ func MarkRegistrationRejected(requestID string, reason registration.DecisionReas
 
 	update := bson.M{
 		"$set": bson.M{
-			"status":          registration.StatusRejected,
+			"status":          models.StatusRejected,
 			"decision_reason": reason,
 			"updated_at":      now,
 			"processed_at":    now,
@@ -133,7 +133,7 @@ func MarkRegistrationRejected(requestID string, reason registration.DecisionReas
 		ctx,
 		bson.M{
 			"_id":    requestID,
-			"status": registration.StatusPending,
+			"status": models.StatusPending,
 		},
 		update,
 	)
