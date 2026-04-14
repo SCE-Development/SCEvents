@@ -74,19 +74,13 @@ func CreateEvent(e models.Event) (*models.Event, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	res, err := coll.InsertOne(ctx, e)
-	if err != nil {
-		return nil, err
+	if e.ID == "" {
+		e.ID = primitive.NewObjectID().Hex()
 	}
 
-	// if Mongo generated an ID, reflect it back in the event
-	if e.ID == "" {
-		switch id := res.InsertedID.(type) {
-		case primitive.ObjectID:
-			e.ID = id.Hex()
-		case string:
-			e.ID = id
-		}
+	_, err := coll.InsertOne(ctx, e)
+	if err != nil {
+		return nil, err
 	}
 
 	return &e, nil
