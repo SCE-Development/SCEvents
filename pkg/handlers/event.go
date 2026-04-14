@@ -85,6 +85,15 @@ func CreateEvent(c *gin.Context) {
 		return
 	}
 
+	event.ApplyDefaults()
+
+	if err := event.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
 	createdEvent, err := db.CreateEvent(event)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -168,6 +177,32 @@ func UpdateEventByID(c *gin.Context) {
 			"error": "no updatable fields provided",
 		})
 		return
+	}
+
+	// Validate patch fields for visibility/status support
+	updatedEvent := existingEvent
+	if err := updatedEvent.ApplyPatch(fields); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// Validate the merged event state after applying PATCH fields
+	if err := updatedEvent.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if _, ok := fields["visibility"]; ok {
+		fields["visibility"] = updatedEvent.Visibility
+		fields["minimum_visible_role"] = updatedEvent.MinimumVisibleRole
+	}
+
+	if _, ok := fields["minimum_visible_role"]; ok {
+		fields["minimum_visible_role"] = updatedEvent.MinimumVisibleRole
 	}
 
 	err = db.UpdateEventByID(id, fields)
