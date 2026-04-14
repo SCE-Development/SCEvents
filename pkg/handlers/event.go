@@ -1,10 +1,11 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	"github.com/SCE-Development/SCEvents/pkg/models"
@@ -277,7 +278,7 @@ func RegisterForEvent(c *gin.Context) {
 		return
 	}
 
-	alreadyRegistered, err := db.IsUserRegisteredForEvent(eventID, payload.Registrant.UserID)
+	alreadyRegistered, err := db.HasPendingOrAcceptedRegistration(eventID, payload.Registrant.UserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to verify existing registration",
@@ -314,8 +315,82 @@ func RegisterForEvent(c *gin.Context) {
 		return
 	}
 
+	var requestIDBytes [16]byte
+	if _, err := rand.Read(requestIDBytes[:]); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to create registration request",
+		})
+		return
+	}
+	requestID := hex.EncodeToString(requestIDBytes[:])
+
+	mongoRequest := models.RegistrationRequest{
+		RequestID:  requestID,
+		EventID:    eventID,
+		Registrant: payload.Registrant,
+		Answers:    payload.RegistrationFormAnswers,
+	}
+
+	_, err = db.CreatePendingRegistration(mongoRequest)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to persist registration request",
+		})
+		return
+	}
+
 	c.JSON(http.StatusAccepted, gin.H{
-		"message":  "registration request sent",
-		"event_id": eventID,
+		"message":    "registration request sent",
+		"event_id":   eventID,
+		"request_id": requestID,
+	})
+}
+
+func GetRegistrationStatus(c *gin.Context) {
+	requestID := c.Param("request_id")
+	if strings.TrimSpace(requestID) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "request id is required",
+		})
+		return
+	}
+
+	userID := c.Query("user_id")
+	if strings.TrimSpace(userID) == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "missing user_id query parameter",
+		})
+		return
+	}
+
+	req, err := db.GetRegistrationByID(requestID)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "registration request not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch registration status",
+		})
+		return
+	}
+
+	if req.Registrant.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "you do not have access to this registration request",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"request_id":      req.RequestID,
+		"event_id":        req.EventID,
+		"status":          req.Status,
+		"decision_reason": req.DecisionReason,
+		"created_at":      req.CreatedAt,
+		"updated_at":      req.UpdatedAt,
+		"processed_at":    req.ProcessedAt,
 	})
 }

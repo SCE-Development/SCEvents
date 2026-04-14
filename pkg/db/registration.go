@@ -75,6 +75,33 @@ func HasAcceptedRegistration(eventID string, userID string) (bool, error) {
 	return true, nil
 }
 
+// HasPendingOrAcceptedRegistration checks if a user has an in-flight or accepted registration for an event.
+// This is used to make the HTTP registration endpoint idempotent-ish for double submits.
+func HasPendingOrAcceptedRegistration(eventID string, userID string) (bool, error) {
+	coll := GetRegistrationsCollection()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{
+		"event_id":           eventID,
+		"registrant.user_id": userID,
+		"status": bson.M{
+			"$in": []models.Status{models.StatusPending, models.StatusAccepted},
+		},
+	}
+
+	err := coll.FindOne(ctx, filter).Err()
+	if err == mongo.ErrNoDocuments {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 // MarkRegistrationAccepted transitions a pending request to accepted and records processing time
 func MarkRegistrationAccepted(requestID string) error {
 	coll := GetRegistrationsCollection()
