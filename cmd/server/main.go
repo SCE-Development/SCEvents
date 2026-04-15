@@ -35,20 +35,6 @@ func main() {
 		}
 	}()
 
-	kafkaBroker := os.Getenv("KAFKA_BROKER")
-	kafkaTopic := os.Getenv("KAFKA_TOPIC")
-	kafkaGroupID := os.Getenv("KAFKA_GROUP_ID")
-
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-	if kafkaBroker == "" || kafkaTopic == "" {
-		log.Println("warning: KAFKA_BROKER or KAFKA_TOPIC empty")
-	}
-
->>>>>>> c493044 (Removed kafka implementation stuff)
-=======
->>>>>>> 0e55751 (Removing code based off Steven's comments)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -57,9 +43,9 @@ func main() {
 		cfg.KafkaTopic,
 		cfg.KafkaGroupID,
 	)
-	
+
 	go consumer.Run(ctx)
-	
+
 	r := gin.Default()
 
 	config := cors.DefaultConfig()
