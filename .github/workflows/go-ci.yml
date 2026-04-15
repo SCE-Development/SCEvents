@@ -1,4 +1,4 @@
-name: Go CI
+name: Golang Validation
 
 on:
   pull_request:
