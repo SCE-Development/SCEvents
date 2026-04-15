@@ -155,6 +155,11 @@ func UpdateEventByID(c *gin.Context) {
 		return
 	}
 
+	// Support legacy events that were created before status/visibility defaults.
+	legacyMissingStatus := strings.TrimSpace(existingEvent.Status) == ""
+	legacyMissingVisibility := strings.TrimSpace(existingEvent.Visibility) == ""
+	existingEvent.ApplyDefaults()
+
 	// Check if user is an admin of this event
 	if !existingEvent.IsAdmin(userID) {
 		c.JSON(http.StatusForbidden, gin.H{
@@ -201,6 +206,19 @@ func UpdateEventByID(c *gin.Context) {
 	if _, ok := fields["visibility"]; ok {
 		fields["visibility"] = updatedEvent.Visibility
 		fields["minimum_visible_role"] = updatedEvent.MinimumVisibleRole
+	}
+
+	if legacyMissingVisibility {
+		if _, ok := fields["visibility"]; !ok {
+			fields["visibility"] = updatedEvent.Visibility
+			fields["minimum_visible_role"] = updatedEvent.MinimumVisibleRole
+		}
+	}
+
+	if legacyMissingStatus {
+		if _, ok := fields["status"]; !ok {
+			fields["status"] = updatedEvent.Status
+		}
 	}
 
 	if _, ok := fields["minimum_visible_role"]; ok {

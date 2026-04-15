@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -300,7 +301,19 @@ func (e *Event) ApplyPatch(fields map[string]interface{}) error {
 			}
 			e.MaxAttendees = int(n)
 
-		case "admins", "registration_form":
+		case "registration_form":
+			data, err := json.Marshal(value)
+			if err != nil {
+				return fmt.Errorf("registration_form must be a valid array")
+			}
+
+			var form []FormQuestion
+			if err := json.Unmarshal(data, &form); err != nil {
+				return fmt.Errorf("registration_form must be a valid array")
+			}
+			e.RegistrationForm = form
+
+		case "admins":
 			// supported by persistence model, but not yet patchable here
 			return fmt.Errorf("%s cannot be updated through this endpoint yet", key)
 		}
