@@ -4,12 +4,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	"github.com/SCE-Development/SCEvents/pkg/models"
+	"github.com/SCE-Development/SCEvents/pkg/registration"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -98,6 +100,7 @@ func CreateEvent(c *gin.Context) {
 
 	createdEvent, err := db.CreateEvent(event)
 	if err != nil {
+		log.Printf("CreateEvent error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to create event",
 		})
@@ -255,96 +258,105 @@ func UpdateEventByID(c *gin.Context) {
 	})
 }
 
-func RegisterForEvent(c *gin.Context) {
-	eventID := c.Param("id")
-	if eventID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "event id is required",
-		})
-		return
-	}
-
-	var payload models.RegistrationPayload
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid JSON payload",
-		})
-		return
-	}
-
-	if strings.TrimSpace(payload.Registrant.UserID) == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "login required to register for event",
-		})
-		return
-	}
-
-	alreadyRegistered, err := db.HasPendingOrAcceptedRegistration(eventID, payload.Registrant.UserID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to verify existing registration",
-		})
-		return
-	}
-	if alreadyRegistered {
-		c.JSON(http.StatusConflict, gin.H{
-			"error": "user is already registered for this event",
-		})
-		return
-	}
-
-	ev, err := db.GetEventByID(eventID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "event not found",
-		})
-		return
-	}
-
-	if err := ev.ValidateRegistration(payload.RegistrationFormAnswers); err != nil {
-		var formErr *models.RegistrationFormValidationError
-		if errors.As(err, &formErr) {
+// RegisterForEvent writes a pending registration to MongoDB, publishes a reference message to Kafka, and returns 202 Accepted.
+func RegisterForEvent(producer *registration.Producer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		eventID := c.Param("id")
+		if eventID == "" {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": formErr.Message,
-				"field": formErr.Field,
+				"error": "event id is required",
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to validate registration",
+
+		var payload models.RegistrationPayload
+		if err := c.ShouldBindJSON(&payload); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "invalid JSON payload",
+			})
+			return
+		}
+
+		if strings.TrimSpace(payload.Registrant.UserID) == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "login required to register for event",
+			})
+			return
+		}
+
+		alreadyRegistered, err := db.HasPendingOrAcceptedRegistration(eventID, payload.Registrant.UserID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to verify existing registration",
+			})
+			return
+		}
+		if alreadyRegistered {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "user is already registered for this event",
+			})
+			return
+		}
+
+		ev, err := db.GetEventByID(eventID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "event not found",
+			})
+			return
+		}
+
+		if err := ev.ValidateRegistration(payload.RegistrationFormAnswers); err != nil {
+			var formErr *models.RegistrationFormValidationError
+			if errors.As(err, &formErr) {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": formErr.Message,
+					"field": formErr.Field,
+				})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to validate registration",
+			})
+			return
+		}
+
+		var requestIDBytes [16]byte
+		if _, err := rand.Read(requestIDBytes[:]); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to create registration request",
+			})
+			return
+		}
+
+		req := models.RegistrationRequest{
+			RequestID:  hex.EncodeToString(requestIDBytes[:]),
+			EventID:    eventID,
+			Registrant: payload.Registrant,
+			Answers:    payload.RegistrationFormAnswers,
+		}
+
+		created, err := db.CreatePendingRegistration(req)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to create registration request",
+			})
+			return
+		}
+
+		if err := producer.PublishRegistration(c.Request.Context(), created.RequestID, eventID, payload.Registrant.UserID); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "failed to queue registration for processing",
+			})
+			return
+		}
+
+		c.JSON(http.StatusAccepted, gin.H{
+			"message":    "registration request sent",
+			"event_id":   eventID,
+			"request_id": created.RequestID,
 		})
-		return
 	}
-
-	var requestIDBytes [16]byte
-	if _, err := rand.Read(requestIDBytes[:]); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to create registration request",
-		})
-		return
-	}
-	requestID := hex.EncodeToString(requestIDBytes[:])
-
-	mongoRequest := models.RegistrationRequest{
-		RequestID:  requestID,
-		EventID:    eventID,
-		Registrant: payload.Registrant,
-		Answers:    payload.RegistrationFormAnswers,
-	}
-
-	_, err = db.CreatePendingRegistration(mongoRequest)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to persist registration request",
-		})
-		return
-	}
-
-	c.JSON(http.StatusAccepted, gin.H{
-		"message":    "registration request sent",
-		"event_id":   eventID,
-		"request_id": requestID,
-	})
 }
 
 func GetRegistrationStatus(c *gin.Context) {
