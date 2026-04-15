@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	"github.com/SCE-Development/SCEvents/pkg/models"
