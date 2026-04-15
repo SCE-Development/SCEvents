@@ -7,7 +7,7 @@ services:
       - ./data/mongo:/data/db
 
   redis:
-    image: redis
+    image: redis:alpine
     ports:
       - "8101:6379"
     command: ["redis-server", "--appendonly", "yes"]
