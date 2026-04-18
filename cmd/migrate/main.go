@@ -1,12 +1,3 @@
-// Command migrate backfills MongoDB documents with default values declared
-// via `default:"..."` struct tags on registered models.
-//
-// Usage:
-//
-//	MONGO_URI=mongodb://localhost:27017 go run ./cmd/migrate
-//
-// Re-running is safe: UpdateMany uses {$exists: false}, so already-migrated
-// documents are not touched.
 package main
 
 import (
@@ -19,15 +10,11 @@ import (
 	"github.com/SCE-Development/SCEvents/pkg/models"
 )
 
-// registryEntry maps a MongoDB collection name to the Go model whose
-// struct tags describe the defaults for that collection.
 type registryEntry struct {
 	Collection string
 	Model      any
 }
 
-// registry is the list of (collection, model) pairs to migrate. Add new
-// models here as the schema grows.
 var registry = []registryEntry{
 	{Collection: "events", Model: models.Event{}},
 }

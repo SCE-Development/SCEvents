@@ -1,10 +1,8 @@
-// Package database hosts cross-cutting MongoDB helpers that aren't tied to
-// a specific collection, starting with the auto-migration utility that
-// backfills documents using `default:"..."` struct tags on models.
 package database
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"reflect"
@@ -15,24 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// AutoMigrateDefaults backfills documents in coll that are missing fields
-// declared with a `default:"..."` struct tag on the provided model.
-//
-// For every struct field that has both a `bson:"..."` name and a
-// `default:"..."` value, it runs:
-//
-//	coll.UpdateMany({field: {$exists: false}}, {$set: {field: <parsedDefault>}})
-//
-// Fields without a `default` tag (or without a usable `bson` name) are
-// skipped, so required columns like "_id" / "name" are never backfilled.
-//
-// Supported field kinds:
-//   - string: raw tag value
-//   - intN / uintN: parsed via strconv
-//   - bool: parsed via strconv.ParseBool
-//   - slice: only "[]" is accepted, written as an empty typed slice
-//
-// Any other kind returns an error so unsupported tags fail loudly.
+
 func AutoMigrateDefaults(ctx context.Context, coll *mongo.Collection, model any) (int64, error) {
 	t := reflect.TypeOf(model)
 	for t != nil && t.Kind() == reflect.Pointer {
@@ -80,8 +61,6 @@ func AutoMigrateDefaults(ctx context.Context, coll *mongo.Collection, model any)
 	return totalUpdated, nil
 }
 
-// bsonFieldName pulls the document field name from a `bson:"name,opts"` tag,
-// stripping modifiers like ",omitempty".
 func bsonFieldName(field reflect.StructField) string {
 	tag, ok := field.Tag.Lookup("bson")
 	if !ok {
@@ -91,8 +70,6 @@ func bsonFieldName(field reflect.StructField) string {
 	return strings.TrimSpace(name)
 }
 
-// parseDefault converts the raw tag string into a Go value typed to match
-// the struct field. Unsupported kinds return an explicit error.
 func parseDefault(t reflect.Type, raw string) (any, error) {
 	switch t.Kind() {
 	case reflect.String:
@@ -120,10 +97,11 @@ func parseDefault(t reflect.Type, raw string) (any, error) {
 		return b, nil
 
 	case reflect.Slice:
-		if raw != "[]" {
-			return nil, fmt.Errorf("slice default must be \"[]\" (got %q)", raw)
+		slicePtr := reflect.New(t)
+		if err := json.Unmarshal([]byte(raw), slicePtr.Interface()); err != nil {
+			return nil, fmt.Errorf("failed to parse slice default %q as JSON: %w", raw, err)
 		}
-		return reflect.MakeSlice(t, 0, 0).Interface(), nil
+		return slicePtr.Elem().Interface(), nil
 
 	default:
 		return nil, fmt.Errorf("unsupported default tag on %s field", t.Kind())
