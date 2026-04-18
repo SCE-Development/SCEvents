@@ -5,7 +5,12 @@ services:
       - "8100:27017"
     volumes:
       - ./data/mongo:/data/db
-
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   redis:
     image: redis:alpine
     ports:
@@ -27,8 +32,12 @@ services:
     ports:
       - "${SERVER_PORT:-8002}:${SERVER_PORT:-8002}"
     depends_on:
-      - mongodb
-      - redis
+    mongodb:
+      condition: service_healthy
+    redis:
+      condition: service_started
+    kafka:
+      condition: service_healthy
     environment:
       - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017}
       - REDIS_ADDR=${REDIS_ADDR:-redis:6379}

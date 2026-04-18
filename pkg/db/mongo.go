@@ -35,6 +35,13 @@ func Connect(uri string) error {
 		return err
 	}
 
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer pingCancel()
+	if err := c.Ping(pingCtx, nil); err != nil {
+		_ = c.Disconnect(ctx)
+		return err
+	}
+	
 	client = c
 	database = c.Database(dbName)
 
