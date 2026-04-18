@@ -18,6 +18,18 @@ import (
 
 const dateLayout = "2006-01-02"
 
+func writeEventEditForbidden(c *gin.Context, ev *models.Event) {
+	if len(ev.Admins) == 0 {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "this event has no dedicated admins; only site admins may modify it",
+		})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{
+		"error": "you are not an admin of this event",
+	})
+}
+
 // GetEvents: query startDate & endDate (YYYY-MM-DD), or omit both for current UTC month; one alone is 400.
 func GetEvents(c *gin.Context) {
 	startQ := strings.TrimSpace(c.Query("startDate"))
@@ -121,7 +133,23 @@ func CreateEvent(c *gin.Context) {
 func DeleteEventByID(c *gin.Context) {
 	id := c.Param("id")
 
-	err := db.DeleteEventByID(id)
+	userID := c.GetString("userID")
+	userRole := c.GetString("userRole")
+
+	existingEvent, err := db.GetEventByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "event not found",
+		})
+		return
+	}
+
+	if !existingEvent.CanEdit(userID, userRole) {
+		writeEventEditForbidden(c, existingEvent)
+		return
+	}
+
+	err = db.DeleteEventByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -138,18 +166,9 @@ func DeleteEventByID(c *gin.Context) {
 func UpdateEventByID(c *gin.Context) {
 	id := c.Param("id")
 
-	// Basic event-admin auth check:
-	// The caller must pass their user_id as a query parameter.
-	// We verify they are listed in the event's Admins before allowing the update.
-	userID := c.Query("user_id")
-	if userID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "missing user_id query parameter",
-		})
-		return
-	}
+	userID := c.GetString("userID")
+	userRole := c.GetString("userRole")
 
-	// Fetch the existing event to verify admin access
 	existingEvent, err := db.GetEventByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
@@ -158,11 +177,8 @@ func UpdateEventByID(c *gin.Context) {
 		return
 	}
 
-	// Check if user is an admin of this event
-	if !existingEvent.IsAdmin(userID) {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": "you are not an admin of this event",
-		})
+	if !existingEvent.CanEdit(userID, userRole) {
+		writeEventEditForbidden(c, existingEvent)
 		return
 	}
 
