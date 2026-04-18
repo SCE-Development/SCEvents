@@ -18,7 +18,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 5s 
+      start_period: 5s
 
   server:
     build:
@@ -37,6 +37,7 @@ services:
       - KAFKA_GROUP_ID=${KAFKA_GROUP_ID:-registration-consumers}
       - SERVER_PORT=${SERVER_PORT:-8002}
       - CLIENT_URL=${CLIENT_URL:-http://localhost:3000}
+      - CLIENT_API_URL=${CLIENT_API_URL:-http://host.docker.internal:8080}
 
   kafka:
     image: apache/kafka:3.8.0

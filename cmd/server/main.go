@@ -11,6 +11,7 @@ import (
 	"github.com/SCE-Development/SCEvents/internal/config"
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	"github.com/SCE-Development/SCEvents/pkg/handlers"
+	"github.com/SCE-Development/SCEvents/pkg/middleware"
 	"github.com/SCE-Development/SCEvents/pkg/registration"
 )
 
@@ -64,11 +65,16 @@ func main() {
 	{
 		events.GET("/", handlers.GetEvents)
 		events.GET("/:id", handlers.GetEventByID)
-		events.POST("/", handlers.CreateEvent)
-		events.POST("/:id/register", handlers.RegisterForEvent)
 		events.GET("/registrations/:request_id", handlers.GetRegistrationStatus)
-		events.DELETE("/:id", handlers.DeleteEventByID)
-		events.PATCH("/:id", handlers.UpdateEventByID)
+
+		protected := events.Group("/")
+		protected.Use(middleware.RequireAuth(middleware.MembershipStateNonMember, cfg.ClientAPIURL))
+		{
+			protected.POST("/", handlers.CreateEvent)
+			protected.POST("/:id/register", handlers.RegisterForEvent)
+			protected.DELETE("/:id", handlers.DeleteEventByID)
+			protected.PATCH("/:id", handlers.UpdateEventByID)
+		}
 	}
 
 	if err := r.Run(":" + cfg.ServerPort); err != nil {

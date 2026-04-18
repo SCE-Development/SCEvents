@@ -10,6 +10,7 @@ type AppConfig struct {
 	KafkaGroupID string
 	ServerPort   string
 	ClientURL    string
+	ClientAPIURL string
 }
 
 func Load() AppConfig {
@@ -21,6 +22,7 @@ func Load() AppConfig {
 		KafkaGroupID: getEnv("KAFKA_GROUP_ID", "registration-consumers"),
 		ServerPort:   getEnv("SERVER_PORT", "8002"),
 		ClientURL:    getEnv("CLIENT_URL", "http://localhost:3000"),
+		ClientAPIURL: getEnv("CLIENT_API_URL", "http://localhost:8080"),
 	}
 }
 
