@@ -48,7 +48,6 @@ type Event struct {
 	Time               string         `bson:"time" json:"time"`
 	Location           string         `bson:"location" json:"location"`
 	Description        string         `bson:"description" json:"description"`
-	// Admins lists event-specific editors. Empty slice after migration means no dedicated admins yet; see #65 for planned "site admin may edit" behavior.
 	Admins             []string       `bson:"admins" json:"admins" default:"[]"`
 	RegistrationForm   []FormQuestion `bson:"registration_form" json:"registration_form" default:"[]"`
 	MaxAttendees       int            `bson:"max_attendees" json:"max_attendees" default:"0"`

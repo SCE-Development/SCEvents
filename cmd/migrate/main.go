@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"strings"
 
 	"github.com/SCE-Development/SCEvents/internal/config"
 	"github.com/SCE-Development/SCEvents/pkg/database"
@@ -15,11 +17,24 @@ type registryEntry struct {
 	Model      any
 }
 
-var registry = []registryEntry{
-	{Collection: "events", Model: models.Event{}},
+var registry = map[string]registryEntry{
+	"events":        {Collection: "events", Model: models.Event{}},
+	"registrations": {Collection: "registrations", Model: models.RegistrationRequest{}},
 }
 
 func main() {
+	if len(os.Args) < 2 || strings.TrimSpace(os.Args[1]) == "" {
+		log.Print("Please specify a collection")
+		os.Exit(1)
+	}
+
+	key := strings.ToLower(strings.TrimSpace(os.Args[1]))
+	entry, ok := registry[key]
+	if !ok {
+		log.Print("Provided type doesn't exist")
+		os.Exit(1)
+	}
+
 	cfg := config.Load()
 
 	if err := db.Connect(cfg.MongoURI); err != nil {
@@ -33,17 +48,13 @@ func main() {
 
 	ctx := context.Background()
 
-	var grandTotal int64
-	for _, entry := range registry {
-		log.Printf("migrating collection %q...", entry.Collection)
+	log.Printf("migrating collection %q...", entry.Collection)
 
-		coll := db.Database().Collection(entry.Collection)
-		updated, err := database.AutoMigrateDefaults(ctx, coll, entry.Model)
-		if err != nil {
-			log.Fatalf("Failed migrating %s: %v", entry.Collection, err)
-		}
-		grandTotal += updated
+	coll := db.Database().Collection(entry.Collection)
+	updated, err := database.AutoMigrateDefaults(ctx, coll, entry.Model)
+	if err != nil {
+		log.Fatalf("Failed migrating %s: %v", entry.Collection, err)
 	}
 
-	log.Printf("All defaults migrated successfully! (%d total field backfills)", grandTotal)
+	log.Printf("Defaults migrated successfully! (%d field backfills)", updated)
 }
