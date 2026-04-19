@@ -4,11 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
-	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -44,7 +39,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	producer := registration.NewProducer([]string{cfg.KafkaBroker}, cfg.KafkaTopic)
+	producer := registration.NewProducer(
+		[]string{cfg.KafkaBroker},
+		cfg.KafkaTopic,
+	)
 
 	consumer := registration.NewConsumer(
 		[]string{cfg.KafkaBroker},

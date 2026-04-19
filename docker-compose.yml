@@ -5,6 +5,12 @@ services:
       - "8100:27017"
     volumes:
       - ./data/mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   redis:
     image: redis:alpine
@@ -27,18 +33,21 @@ services:
     ports:
       - "${SERVER_PORT:-8002}:${SERVER_PORT:-8002}"
     depends_on:
-      - mongodb
-      - redis
-      - kafka
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
     environment:
-      MONGO_URI: ${MONGO_URI:-mongodb://mongodb:27017}
-      REDIS_ADDR: ${REDIS_ADDR:-redis:6379}
-      KAFKA_BROKER: ${KAFKA_BROKER:-kafka:29092}
-      KAFKA_TOPIC: ${KAFKA_TOPIC:-registrations}
-      KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-registration-consumers}
-      SERVER_PORT: ${SERVER_PORT:-8002}
-      CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
-      CLIENT_API_URL: ${CLIENT_API_URL:-http://host.docker.internal:8080}
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017}
+      - REDIS_ADDR=${REDIS_ADDR:-redis:6379}
+      - KAFKA_BROKER=${KAFKA_BROKER:-kafka:29092}
+      - KAFKA_TOPIC=${KAFKA_TOPIC:-registrations}
+      - KAFKA_GROUP_ID=${KAFKA_GROUP_ID:-registration-consumers}
+      - SERVER_PORT=${SERVER_PORT:-8002}
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:3000}
+      - CLIENT_API_URL=${CLIENT_API_URL:-http://host.docker.internal:8080}
 
   kafka:
     image: apache/kafka:3.8.0
