@@ -359,6 +359,106 @@ func RegisterForEvent(producer *registration.Producer) gin.HandlerFunc {
 	}
 }
 
+func JoinEventWaitlist(c *gin.Context) {
+	eventID := c.Param("id")
+	if strings.TrimSpace(eventID) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "event id is required",
+		})
+		return
+	}
+
+	userID := c.GetString("userID")
+	if strings.TrimSpace(userID) == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "login required to join waitlist",
+		})
+		return
+	}
+
+	ev, err := db.GetEventByID(eventID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "event not found",
+		})
+		return
+	}
+
+	if !ev.WaitlistEnabled {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "waitlist is not enabled for this event",
+		})
+		return
+	}
+
+	if ev.WaitlistSize <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "waitlist is not configured for this event",
+		})
+		return
+	}
+
+	alreadyRegistered, err := db.HasAcceptedRegistration(eventID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to verify existing registration",
+		})
+		return
+	}
+	if alreadyRegistered {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "user is already registered for this event",
+		})
+		return
+	}
+
+	alreadyWaitlisted, err := db.HasWaitlistEntry(eventID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to verify existing waitlist entry",
+		})
+		return
+	}
+	if alreadyWaitlisted {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "user is already on the waitlist for this event",
+		})
+		return
+	}
+
+	count, err := db.CountWaitlistEntries(eventID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to count waitlist entries",
+		})
+		return
+	}
+
+	if count >= int64(ev.WaitlistSize) {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "waitlist is full",
+		})
+		return
+	}
+
+	entry := models.WaitlistEntry{
+		EventID: eventID,
+		UserID:  userID,
+	}
+
+	if err := db.CreateWaitlistEntry(entry); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to join waitlist",
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message":  "joined waitlist successfully",
+		"event_id": eventID,
+	})
+}
+
 func GetRegistrationStatus(c *gin.Context) {
 	requestID := c.Param("request_id")
 	if strings.TrimSpace(requestID) == "" {

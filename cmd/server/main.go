@@ -86,6 +86,7 @@ func main() {
 		{
 			protected.POST("/", handlers.CreateEvent)
 			protected.POST("/:id/register", handlers.RegisterForEvent(producer))
+			protected.POST("/:id/waitlist", handlers.JoinEventWaitlist)
 			protected.DELETE("/:id", handlers.DeleteEventByID)
 			protected.PATCH("/:id", handlers.UpdateEventByID)
 		}
