@@ -30,7 +30,7 @@ func main() {
 	if err := db.ConnectRedis(cfg.RedisAddr); err != nil {
 		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
-	defer func(){
+	defer func() {
 		if err := db.DisconnectRedis(); err != nil {
 			log.Printf("Error disconnecting Redis: %v", err)
 		}
@@ -38,6 +38,11 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	producer := registration.NewProducer(
+		[]string{cfg.KafkaBroker},
+		cfg.KafkaTopic,
+	)
 
 	consumer := registration.NewConsumer(
 		[]string{cfg.KafkaBroker},
@@ -71,7 +76,7 @@ func main() {
 		protected.Use(middleware.RequireAuth(middleware.MembershipStateNonMember, cfg.ClientAPIURL))
 		{
 			protected.POST("/", handlers.CreateEvent)
-			protected.POST("/:id/register", handlers.RegisterForEvent)
+			protected.POST("/:id/register", handlers.RegisterForEvent(producer))
 			protected.DELETE("/:id", handlers.DeleteEventByID)
 			protected.PATCH("/:id", handlers.UpdateEventByID)
 		}

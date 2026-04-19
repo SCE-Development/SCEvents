@@ -41,7 +41,7 @@ func Connect(uri string) error {
 		_ = c.Disconnect(ctx)
 		return err
 	}
-	
+
 	client = c
 	database = c.Database(dbName)
 

@@ -49,6 +49,14 @@ func (c *Consumer) Run(ctx context.Context) {
 	}
 }
 
+// Close releases the Kafka reader.
+func (c *Consumer) Close() error {
+	if c == nil || c.reader == nil {
+		return nil
+	}
+	return c.reader.Close()
+}
+
 func ProcessKafkaMessage(raw []byte) error {
 	var msg models.KafkaRegistrationMessage
 	if err := json.Unmarshal(raw, &msg); err != nil {
