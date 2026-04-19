@@ -17,6 +17,8 @@ type registryEntry struct {
 	Model      any
 }
 
+// registry maps CLI subcommands to a Mongo collection and the struct used for default tags.
+// Add an entry when a new collection gets fields with default tags; Go cannot infer model types from a string alone.
 var registry = map[string]registryEntry{
 	"events":        {Collection: "events", Model: models.Event{}},
 	"registrations": {Collection: "registrations", Model: models.RegistrationRequest{}},
