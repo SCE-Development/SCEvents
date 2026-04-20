@@ -16,6 +16,14 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+type EventHandler struct {
+	stores *db.Stores
+}
+
+func NewEventHandler(stores *db.Stores) *EventHandler {
+	return &EventHandler{stores: stores}
+}
+
 const dateLayout = "2006-01-02"
 
 func writeEventEditForbidden(c *gin.Context, ev *models.Event) {
@@ -31,7 +39,7 @@ func writeEventEditForbidden(c *gin.Context, ev *models.Event) {
 }
 
 // GetEvents: query startDate & endDate (YYYY-MM-DD), or omit both for current UTC month; one alone is 400.
-func GetEvents(c *gin.Context) {
+func (h *EventHandler) GetEvents(c *gin.Context) {
 	startQ := strings.TrimSpace(c.Query("startDate"))
 	endQ := strings.TrimSpace(c.Query("endDate"))
 
@@ -75,7 +83,7 @@ func GetEvents(c *gin.Context) {
 }
 
 // returns a single event by ID
-func GetEventByID(c *gin.Context) {
+func (h *EventHandler) GetEventByID(c *gin.Context) {
 	id := c.Param("id")
 
 	event, err := db.GetEventByID(id)
@@ -90,7 +98,7 @@ func GetEventByID(c *gin.Context) {
 }
 
 // creates a new event
-func CreateEvent(c *gin.Context) {
+func (h *EventHandler) CreateEvent(c *gin.Context) {
 	var event models.Event
 
 	// parse JSON request body into struct
@@ -119,7 +127,7 @@ func CreateEvent(c *gin.Context) {
 		return
 	}
 
-	if err := db.SetEventHeadcount(createdEvent.ID, createdEvent.MaxAttendees); err != nil {
+	if err := h.stores.Redis.SetEventHeadcount(c.Request.Context(), createdEvent.ID, createdEvent.MaxAttendees); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to store event headcount",
 		})
@@ -130,7 +138,7 @@ func CreateEvent(c *gin.Context) {
 }
 
 // deletes an event by ID
-func DeleteEventByID(c *gin.Context) {
+func (h *EventHandler) DeleteEventByID(c *gin.Context) {
 	id := c.Param("id")
 
 	userID := c.GetString("userID")
@@ -163,7 +171,7 @@ func DeleteEventByID(c *gin.Context) {
 }
 
 // updates an event by ID (partial update)
-func UpdateEventByID(c *gin.Context) {
+func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 	id := c.Param("id")
 
 	userID := c.GetString("userID")
@@ -245,7 +253,7 @@ func UpdateEventByID(c *gin.Context) {
 	if maxAttendees, ok := fields["max_attendees"]; ok {
 		if newMax, ok := maxAttendees.(float64); ok {
 			// Get current remaining seats from Redis
-			currentRemaining, err := db.GetEventHeadcount(id)
+			currentRemaining, err := h.stores.Redis.GetEventHeadcount(c.Request.Context(), id)
 			if err != nil {
 				// If Redis key doesn't exist yet, no seats have been taken
 				currentRemaining = existingEvent.MaxAttendees
@@ -260,7 +268,7 @@ func UpdateEventByID(c *gin.Context) {
 				newRemaining = 0
 			}
 
-			if err := db.SetEventHeadcount(id, newRemaining); err != nil {
+			if err := h.stores.Redis.SetEventHeadcount(c.Request.Context(), id, newRemaining); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"error": "event updated but failed to sync headcount in Redis",
 				})
@@ -275,7 +283,7 @@ func UpdateEventByID(c *gin.Context) {
 }
 
 // RegisterForEvent writes a pending registration to MongoDB, publishes a reference message to Kafka, and returns 202 Accepted.
-func RegisterForEvent(producer *registration.Producer) gin.HandlerFunc {
+func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		eventID := c.Param("id")
 		if eventID == "" {
@@ -375,7 +383,7 @@ func RegisterForEvent(producer *registration.Producer) gin.HandlerFunc {
 	}
 }
 
-func JoinEventWaitlist(c *gin.Context) {
+func (h *EventHandler) JoinEventWaitlist(c *gin.Context) {
 	eventID := c.Param("id")
 	if strings.TrimSpace(eventID) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -469,7 +477,7 @@ func JoinEventWaitlist(c *gin.Context) {
 			})
 			return
 		}
-		
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to join waitlist",
 		})
@@ -482,7 +490,7 @@ func JoinEventWaitlist(c *gin.Context) {
 	})
 }
 
-func GetRegistrationStatus(c *gin.Context) {
+func (h *EventHandler) GetRegistrationStatus(c *gin.Context) {
 	requestID := c.Param("request_id")
 	if strings.TrimSpace(requestID) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
