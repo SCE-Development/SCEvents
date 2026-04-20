@@ -192,6 +192,15 @@ func (e *Event) IsAdmin(userID string) bool {
 	return false
 }
 
+// CanEdit reports whether the caller may modify this event.
+// Admin-less events require callerSiteRole=admin; otherwise userID must be in Admins.
+func (e *Event) CanEdit(userID, callerSiteRole string) bool {
+	if len(e.Admins) == 0 {
+		return strings.EqualFold(strings.TrimSpace(callerSiteRole), RoleAdmin)
+	}
+	return e.IsAdmin(userID)
+}
+
 func (e *Event) ValidateRegistration(answers map[string]any) error {
 	for _, question := range e.RegistrationForm {
 		if !question.Required {
