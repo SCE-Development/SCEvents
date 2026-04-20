@@ -4,6 +4,11 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -37,7 +42,6 @@ func main() {
 	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	producer := registration.NewProducer(
 		[]string{cfg.KafkaBroker},
@@ -50,7 +54,12 @@ func main() {
 		cfg.KafkaGroupID,
 	)
 
-	go consumer.Run(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		consumer.Run(ctx)
+	}()
 
 	r := gin.Default()
 
@@ -82,7 +91,58 @@ func main() {
 		}
 	}
 
-	if err := r.Run(":" + cfg.ServerPort); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	srv := &http.Server{
+		Addr:    ":" + cfg.ServerPort,
+		Handler: r,
 	}
+
+	errChan := make(chan error, 1)
+
+	// Start the HTTP server in a goroutine
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errChan <- err
+		}
+	}()
+
+	// Block until a signal is received or a background service crashes
+	gracefulShutdown(cancel, &wg, errChan,
+		srv.Shutdown,
+		func(_ context.Context) error { return consumer.Close() },
+		func(_ context.Context) error { return producer.Close() },
+	)
+}
+
+// gracefulShutdown blocks until a stop signal or critical error is received.
+// It then cancels the global context, runs all closers with a timeout, and
+// waits for tracked goroutines to finish.
+func gracefulShutdown(cancel context.CancelFunc, wg *sync.WaitGroup, errChan <-chan error, closers ...func(context.Context) error) {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Block until a signal is received or a background service crashes
+	select {
+	case err := <-errChan:
+		log.Printf("critical error: %v", err)
+	case <-quit:
+		log.Println("shutting down...")
+	}
+
+	// 1. Cancel the global context to tell background workers (like Kafka) to stop looping
+	cancel()
+
+	// 2. Give cleanup tasks up to 15 seconds to finish
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer shutdownCancel()
+
+	// 3. Execute all provided closer functions
+	for _, closer := range closers {
+		if err := closer(shutdownCtx); err != nil {
+			log.Printf("shutdown error: %v", err)
+		}
+	}
+
+	// Wait for all goroutines to exit.
+	wg.Wait()
+	log.Println("shutdown complete.")
 }
