@@ -26,6 +26,9 @@ func main() {
 	if err := db.Connect(cfg.MongoURI); err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
+	if err := db.InitWaitlistIndexes(); err != nil {
+		log.Fatalf("Failed to initialize waitlist indexes: %v", err)
+	}
 	defer func() {
 		if err := db.Disconnect(); err != nil {
 			log.Printf("Error disconnecting MongoDB: %v", err)
@@ -86,6 +89,7 @@ func main() {
 		{
 			protected.POST("/", handlers.CreateEvent)
 			protected.POST("/:id/register", handlers.RegisterForEvent(producer))
+			protected.POST("/:id/waitlist", handlers.JoinEventWaitlist)
 			protected.DELETE("/:id", handlers.DeleteEventByID)
 			protected.PATCH("/:id", handlers.UpdateEventByID)
 		}

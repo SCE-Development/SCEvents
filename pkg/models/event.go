@@ -54,6 +54,8 @@ type Event struct {
 	Status             string         `bson:"status" json:"status"`
 	Visibility         string         `bson:"visibility" json:"visibility"`
 	MinimumVisibleRole string         `bson:"minimum_visible_role,omitempty" json:"minimum_visible_role,omitempty"`
+	WaitlistEnabled	   bool 		  `bson:"waitlist_enabled" json:"waitlist_enabled"`
+	WaitlistSize       int  		  `bson:"waitlist_size,omitempty" json:"waitlist_size,omitempty"`
 }
 
 type RegistrationFormValidationError struct {
@@ -87,6 +89,10 @@ func (e *Event) normalize() {
 	if e.Visibility == VisibilityPublic {
 		e.MinimumVisibleRole = ""
 	}
+
+	if !e.WaitlistEnabled {
+		e.WaitlistSize = 0
+	}
 }
 
 // Validate validates the event as a whole.
@@ -118,6 +124,10 @@ func (e *Event) Validate() error {
 	}
 	if e.MaxAttendees < 0 {
 		return fmt.Errorf("max_attendees cannot be negative")
+	}
+
+	if e.WaitlistEnabled && e.WaitlistSize <= 0 {
+		return fmt.Errorf("waitlist_size must be greater than 0 when waitlist_enabled is true")
 	}
 
 	return nil
@@ -300,6 +310,20 @@ func (e *Event) ApplyPatch(fields map[string]interface{}) error {
 			}
 			e.MaxAttendees = int(n)
 
+		case "waitlist_enabled":
+			b, ok := value.(bool)
+			if !ok {
+				return fmt.Errorf("waitlist_enabled must be a boolean")
+			}
+			e.WaitlistEnabled = b
+
+		case "waitlist_size":
+			n, ok := value.(float64)
+			if !ok {
+				return fmt.Errorf("waitlist_size must be a number")
+			}
+			e.WaitlistSize = int(n)
+			
 		case "admins", "registration_form":
 			// supported by persistence model, but not yet patchable here
 			return fmt.Errorf("%s cannot be updated through this endpoint yet", key)
