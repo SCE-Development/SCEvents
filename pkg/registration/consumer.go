@@ -14,9 +14,10 @@ import (
 
 type Consumer struct {
 	reader *kafka.Reader
+	stores *db.Stores
 }
 
-func NewConsumer(brokers []string, topic string, groupID string) *Consumer {
+func NewConsumer(brokers []string, topic string, groupID string, stores *db.Stores) *Consumer {
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        brokers,
 		Topic:          topic,
@@ -24,7 +25,10 @@ func NewConsumer(brokers []string, topic string, groupID string) *Consumer {
 		CommitInterval: 0,
 	})
 
-	return &Consumer{reader: r}
+	return &Consumer{
+		reader: r,
+		stores: stores,
+	}
 }
 
 func (c *Consumer) Run(ctx context.Context) {
@@ -38,7 +42,7 @@ func (c *Consumer) Run(ctx context.Context) {
 			continue
 		}
 
-		if err := ProcessKafkaMessage(msg.Value); err != nil {
+		if err := c.processKafkaMessage(ctx, msg.Value); err != nil {
 			log.Printf("consumer process error: %v", err)
 			continue
 		}
@@ -57,7 +61,7 @@ func (c *Consumer) Close() error {
 	return c.reader.Close()
 }
 
-func ProcessKafkaMessage(raw []byte) error {
+func (c *Consumer) processKafkaMessage(ctx context.Context, raw []byte) error {
 	var msg models.KafkaRegistrationMessage
 	if err := json.Unmarshal(raw, &msg); err != nil {
 		return err
@@ -92,7 +96,7 @@ func ProcessKafkaMessage(raw []byte) error {
 		return db.MarkRegistrationRejected(msg.RequestID, models.ReasonDuplicateUser)
 	}
 
-	ok, err := db.TryTakeEventSeat(msg.EventID)
+	ok, err := c.stores.Redis.TryTakeEventSeat(ctx, msg.EventID)
 	if err != nil {
 		return err
 	}
@@ -101,7 +105,7 @@ func ProcessKafkaMessage(raw []byte) error {
 	}
 
 	if err := db.MarkRegistrationAccepted(msg.RequestID); err != nil {
-		_ = db.ReleaseEventSeat(msg.EventID)
+		_ = c.stores.Redis.ReleaseEventSeat(ctx, msg.EventID)
 		return err
 	}
 

@@ -12,16 +12,14 @@ var (
 	redisClient *redis.Client
 )
 
-
-// Connect initializes the global Redis client using the provided address.
-
+// ConnectRedis initializes the global Redis client using the provided address.
 func ConnectRedis(addr string) error {
 	redisClient = redis.NewClient(&redis.Options{
-		Addr: addr,
-		Password: "", 
-		DB: 0, 
+		Addr:     addr,
+		Password: "",
+		DB:       0,
 	})
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	// Test the connection with a ping
@@ -33,7 +31,7 @@ func ConnectRedis(addr string) error {
 	return nil
 }
 
-// Disconnect closes the global Redis client if it has been initialized.
+// DisconnectRedis closes the global Redis client if it has been initialized.
 func DisconnectRedis() error {
 	if redisClient == nil {
 		return nil
@@ -50,8 +48,15 @@ func RedisClient() *redis.Client {
 	return redisClient
 }
 
+type redisStore struct {
+	client *redis.Client
+}
+
+func NewRedisStore(client *redis.Client) RedisStore {
+	return &redisStore{client: client}
+}
+
 // EventHeadcountKey returns the Redis key for an event's headcount (capacity).
-// Pattern: event:{event_id}:headcount -> value: capacity (integer).
 func EventHeadcountKey(eventID string) string {
 	return fmt.Sprintf("event:%s:headcount", eventID)
 }
@@ -60,27 +65,20 @@ func EventRegistrantsKey(eventID string) string {
 	return fmt.Sprintf("event:%s:registrants", eventID)
 }
 
-func SetEventHeadcount(eventID string, capacity int) error {
-	if redisClient == nil {
+func (s *redisStore) SetEventHeadcount(ctx context.Context, eventID string, capacity int) error {
+	if s.client == nil {
 		return fmt.Errorf("redis not connected")
 	}
-	ctx := context.Background()
 	key := EventHeadcountKey(eventID)
-	return redisClient.Set(ctx, key, capacity, 0).Err()
+	return s.client.Set(ctx, key, capacity, 0).Err()
 }
 
-// GetEventHeadcount returns the current remaining headcount for an event from Redis.
-func GetEventHeadcount(eventID string) (int, error) {
-	if redisClient == nil {
+func (s *redisStore) GetEventHeadcount(ctx context.Context, eventID string) (int, error) {
+	if s.client == nil {
 		return 0, fmt.Errorf("redis not connected")
 	}
-	ctx := context.Background()
 	key := EventHeadcountKey(eventID)
-	val, err := redisClient.Get(ctx, key).Int()
-	if err != nil {
-		return 0, err
-	}
-	return val, nil
+	return s.client.Get(ctx, key).Int()
 }
 
 var takeSeatScript = redis.NewScript(`
@@ -98,21 +96,15 @@ redis.call("DECR", KEYS[1])
 return 1
 `)
 
-// TryTakeEventSeat atomically checks whether the event has remaining capacity
-// and decrements it by 1 only if capacity is available.
-func TryTakeEventSeat(eventID string) (bool, error) {
-	if redisClient == nil {
+func (s *redisStore) TryTakeEventSeat(ctx context.Context, eventID string) (bool, error) {
+	if s.client == nil {
 		return false, fmt.Errorf("redis not connected")
 	}
-
-	ctx := context.Background()
 	key := EventHeadcountKey(eventID)
-
-	result, err := takeSeatScript.Run(ctx, redisClient, []string{key}).Int()
+	result, err := takeSeatScript.Run(ctx, s.client, []string{key}).Int()
 	if err != nil {
 		return false, err
 	}
-
 	switch result {
 	case 1:
 		return true, nil
@@ -125,27 +117,25 @@ func TryTakeEventSeat(eventID string) (bool, error) {
 	}
 }
 
-// ReleaseEventSeat adds 1 back to the remaining capacity.
-func ReleaseEventSeat(eventID string) error {
-	if redisClient == nil {
+func (s *redisStore) ReleaseEventSeat(ctx context.Context, eventID string) error {
+	if s.client == nil {
 		return fmt.Errorf("redis not connected")
 	}
-
-	ctx := context.Background()
 	key := EventHeadcountKey(eventID)
-
-	return redisClient.Incr(ctx, key).Err()
+	return s.client.Incr(ctx, key).Err()
 }
 
-func IsUserRegisteredForEvent(eventID string, userID string) (bool, error) {
-	if redisClient == nil {
+func (s *redisStore) IsUserRegisteredForEvent(ctx context.Context, eventID string, userID string) (bool, error) {
+	if s.client == nil {
 		return false, fmt.Errorf("redis not connected")
 	}
-	ctx := context.Background()
 	key := EventRegistrantsKey(eventID)
-	isMember, err := redisClient.SIsMember(ctx, key, userID).Result()
-	if err != nil {
-		return false, err
+	return s.client.SIsMember(ctx, key, userID).Result()
+}
+
+func (s *redisStore) Close() error {
+	if s.client == nil {
+		return nil
 	}
-	return isMember, nil
+	return s.client.Close()
 }

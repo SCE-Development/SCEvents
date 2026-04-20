@@ -31,3 +31,6 @@ jobs:
 
       - name: Build all packages
         run: go build ./...
+
+      - name: Run unit tests
+        run: go test ./...

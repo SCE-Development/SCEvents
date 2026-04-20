@@ -46,6 +46,11 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	redisStore := db.NewRedisStore(db.RedisClient())
+	stores := &db.Stores{
+		Redis: redisStore,
+	}
+
 	producer := registration.NewProducer(
 		[]string{cfg.KafkaBroker},
 		cfg.KafkaTopic,
@@ -55,7 +60,10 @@ func main() {
 		[]string{cfg.KafkaBroker},
 		cfg.KafkaTopic,
 		cfg.KafkaGroupID,
+		stores,
 	)
+
+	eventHandler := handlers.NewEventHandler(stores)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -80,18 +88,18 @@ func main() {
 
 	events := r.Group("/events")
 	{
-		events.GET("/", handlers.GetEvents)
-		events.GET("/:id", handlers.GetEventByID)
-		events.GET("/registrations/:request_id", handlers.GetRegistrationStatus)
+		events.GET("/", eventHandler.GetEvents)
+		events.GET("/:id", eventHandler.GetEventByID)
+		events.GET("/registrations/:request_id", eventHandler.GetRegistrationStatus)
 
 		protected := events.Group("/")
 		protected.Use(middleware.RequireAuth(middleware.MembershipStateNonMember, cfg.ClientAPIURL))
 		{
-			protected.POST("/", handlers.CreateEvent)
-			protected.POST("/:id/register", handlers.RegisterForEvent(producer))
-			protected.POST("/:id/waitlist", handlers.JoinEventWaitlist)
-			protected.DELETE("/:id", handlers.DeleteEventByID)
-			protected.PATCH("/:id", handlers.UpdateEventByID)
+			protected.POST("/", eventHandler.CreateEvent)
+			protected.POST("/:id/register", eventHandler.RegisterForEvent(producer))
+			protected.POST("/:id/waitlist", eventHandler.JoinEventWaitlist)
+			protected.DELETE("/:id", eventHandler.DeleteEventByID)
+			protected.PATCH("/:id", eventHandler.UpdateEventByID)
 		}
 	}
 
