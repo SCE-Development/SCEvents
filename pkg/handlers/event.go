@@ -447,6 +447,13 @@ func JoinEventWaitlist(c *gin.Context) {
 	}
 
 	if err := db.CreateWaitlistEntry(entry); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "user is already on the waitlist for this event",
+			})
+			return
+		}
+		
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to join waitlist",
 		})
