@@ -2,6 +2,9 @@ package db
 
 import (
 	"context"
+
+	"github.com/SCE-Development/SCEvents/pkg/models"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type RedisStore interface {
@@ -13,8 +16,30 @@ type RedisStore interface {
 	Close() error
 }
 
+type MongoStore interface {
+	GetEvents(ctx context.Context, startDate, endDate string) ([]models.Event, error)
+	GetEventByID(ctx context.Context, id string) (*models.Event, error)
+	CreateEvent(ctx context.Context, e models.Event) (*models.Event, error)
+	DeleteEventByID(ctx context.Context, id string) error
+	UpdateEventByID(ctx context.Context, id string, fields map[string]interface{}) error
+	CreatePendingRegistration(ctx context.Context, r models.RegistrationRequest) (*models.RegistrationRequest, error)
+	GetRegistrationByID(ctx context.Context, requestID string) (*models.RegistrationRequest, error)
+	HasAcceptedRegistration(ctx context.Context, eventID, userID string) (bool, error)
+	HasPendingOrAcceptedRegistration(ctx context.Context, eventID, userID string) (bool, error)
+	MarkRegistrationAccepted(ctx context.Context, requestID string) error
+	MarkRegistrationRejected(ctx context.Context, requestID string, reason models.DecisionReason) error
+}
+
 type Stores struct {
 	Redis RedisStore
-	// Mongo MongoStore 
-	// Kafka KafkaClient
+	Mongo MongoStore
+}
+
+type mongoStore struct {
+	events        *mongo.Collection
+	registrations *mongo.Collection
+}
+
+func NewMongoStore(events, registrations *mongo.Collection) MongoStore {
+	return &mongoStore{events: events, registrations: registrations}
 }
