@@ -16,6 +16,11 @@ type RedisStore interface {
 	Close() error
 }
 
+type KafkaProducer interface {
+	PublishRegistration(ctx context.Context, requestID string, eventID string, userID string) error
+	Close() error
+}
+
 type MongoStore interface {
 	GetEvents(ctx context.Context, startDate, endDate string) ([]models.Event, error)
 	GetEventByID(ctx context.Context, id string) (*models.Event, error)
@@ -33,6 +38,7 @@ type MongoStore interface {
 type Stores struct {
 	Redis RedisStore
 	Mongo MongoStore
+	Kafka KafkaProducer
 }
 
 type mongoStore struct {

@@ -71,7 +71,7 @@ func (c *Consumer) processKafkaMessage(ctx context.Context, raw []byte) error {
 		return err
 	}
 
-	req, err := db.GetRegistrationByID(msg.RequestID)
+	req, err := c.stores.Mongo.GetRegistrationByID(ctx, msg.RequestID)
 	if err != nil {
 		return err
 	}
@@ -80,20 +80,20 @@ func (c *Consumer) processKafkaMessage(ctx context.Context, raw []byte) error {
 		return nil
 	}
 
-	_, err = db.GetEventByID(msg.EventID)
+	_, err = c.stores.Mongo.GetEventByID(ctx, msg.EventID)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return db.MarkRegistrationRejected(msg.RequestID, models.ReasonEventNotFound)
+			return c.stores.Mongo.MarkRegistrationRejected(ctx, msg.RequestID, models.ReasonEventNotFound)
 		}
 		return err
 	}
 
-	duplicate, err := db.HasAcceptedRegistration(msg.EventID, msg.UserID)
+	duplicate, err := c.stores.Mongo.HasAcceptedRegistration(ctx, msg.EventID, msg.UserID)
 	if err != nil {
 		return err
 	}
 	if duplicate {
-		return db.MarkRegistrationRejected(msg.RequestID, models.ReasonDuplicateUser)
+		return c.stores.Mongo.MarkRegistrationRejected(ctx, msg.RequestID, models.ReasonDuplicateUser)
 	}
 
 	ok, err := c.stores.Redis.TryTakeEventSeat(ctx, msg.EventID)
@@ -101,10 +101,10 @@ func (c *Consumer) processKafkaMessage(ctx context.Context, raw []byte) error {
 		return err
 	}
 	if !ok {
-		return db.MarkRegistrationRejected(msg.RequestID, models.ReasonCapacityFull)
+		return c.stores.Mongo.MarkRegistrationRejected(ctx, msg.RequestID, models.ReasonCapacityFull)
 	}
 
-	if err := db.MarkRegistrationAccepted(msg.RequestID); err != nil {
+	if err := c.stores.Mongo.MarkRegistrationAccepted(ctx, msg.RequestID); err != nil {
 		_ = c.stores.Redis.ReleaseEventSeat(ctx, msg.EventID)
 		return err
 	}
