@@ -1,16 +1,25 @@
-package db
+package registration
 
 import (
 	"context"
 	"time"
 
+	dbmongo "github.com/SCE-Development/SCEvents/pkg/db/mongo"
 	"github.com/SCE-Development/SCEvents/pkg/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+type mongoStore struct {
+	registrations *mongo.Collection
+}
+
+func NewMongoStore(registrations *mongo.Collection) *mongoStore {
+	return &mongoStore{registrations: registrations}
+}
+
 func GetRegistrationsCollection() *mongo.Collection {
-	return Database().Collection("registrations")
+	return dbmongo.Database().Collection("registrations")
 }
 
 // CreatePendingRegistration inserts a new registration request with status "pending" before async processing

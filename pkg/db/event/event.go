@@ -1,14 +1,27 @@
-package db
+package event
 
 import (
 	"context"
 	"time"
 
+	dbmongo "github.com/SCE-Development/SCEvents/pkg/db/mongo"
 	"github.com/SCE-Development/SCEvents/pkg/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
+
+type mongoStore struct {
+	events *mongo.Collection
+}
+
+func NewMongoStore(events *mongo.Collection) *mongoStore {
+	return &mongoStore{events: events}
+}
+
+func GetEventsCollection() *mongo.Collection {
+	return dbmongo.Database().Collection("events")
+}
 
 // GetEvents returns events overlapping [startDate, endDate] (YYYY-MM-DD strings).
 func GetEvents(startDate, endDate string) ([]models.Event, error) {

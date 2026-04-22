@@ -1,4 +1,4 @@
-package db
+package registration
 
 import (
 	"context"
@@ -14,7 +14,7 @@ func TestCreatePendingRegistration(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("success", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(mt.Coll)
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 		req := models.RegistrationRequest{
 			RequestID: "req-1",
@@ -45,7 +45,7 @@ func TestGetRegistrationByID(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("found", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(mt.Coll)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
 			{"_id", "req-1"},
@@ -70,7 +70,7 @@ func TestGetRegistrationByID(t *testing.T) {
 	})
 
 	mt.Run("not found", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(mt.Coll)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch))
 		_, err := store.GetRegistrationByID(context.Background(), "nonexistent")
@@ -84,7 +84,7 @@ func TestHasAcceptedRegistration(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("exists", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(mt.Coll)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
 			{"_id", "req-1"},
@@ -101,7 +101,7 @@ func TestHasAcceptedRegistration(t *testing.T) {
 	})
 
 	mt.Run("does not exist", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(mt.Coll)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch))
 		exists, err := store.HasAcceptedRegistration(context.Background(), "event-1", "user-1")
@@ -118,7 +118,7 @@ func TestHasPendingOrAcceptedRegistration(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("exists", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(mt.Coll)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
 			{"_id", "req-1"},
@@ -135,7 +135,7 @@ func TestHasPendingOrAcceptedRegistration(t *testing.T) {
 	})
 
 	mt.Run("does not exist", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(mt.Coll)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch))
 		exists, err := store.HasPendingOrAcceptedRegistration(context.Background(), "event-1", "user-1")
@@ -152,7 +152,7 @@ func TestMarkRegistrationAccepted(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("success", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(mt.Coll)
 		mt.AddMockResponses(bson.D{
 			{"ok", 1},
 			{"n", int32(1)},
@@ -164,7 +164,7 @@ func TestMarkRegistrationAccepted(t *testing.T) {
 	})
 
 	mt.Run("not found", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(mt.Coll)
 		mt.AddMockResponses(bson.D{
 			{"ok", 1},
 			{"n", int32(0)},
@@ -181,7 +181,7 @@ func TestMarkRegistrationRejected(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("success", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(mt.Coll)
 		mt.AddMockResponses(bson.D{
 			{"ok", 1},
 			{"n", int32(1)},
@@ -193,7 +193,7 @@ func TestMarkRegistrationRejected(t *testing.T) {
 	})
 
 	mt.Run("not found", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(mt.Coll)
 		mt.AddMockResponses(bson.D{
 			{"ok", 1},
 			{"n", int32(0)},

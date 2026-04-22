@@ -9,18 +9,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SCE-Development/SCEvents/pkg/db"
+	dbevent "github.com/SCE-Development/SCEvents/pkg/db/event"
+	dbregistration "github.com/SCE-Development/SCEvents/pkg/db/registration"
+	"github.com/SCE-Development/SCEvents/pkg/db/stores"
+	dbwaitlist "github.com/SCE-Development/SCEvents/pkg/db/waitlist"
 	"github.com/SCE-Development/SCEvents/pkg/models"
-	"github.com/SCE-Development/SCEvents/pkg/registration"
+	registrationqueue "github.com/SCE-Development/SCEvents/pkg/registration"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type EventHandler struct {
-	stores *db.Stores
+	stores *stores.Stores
 }
 
-func NewEventHandler(stores *db.Stores) *EventHandler {
+func NewEventHandler(stores *stores.Stores) *EventHandler {
 	return &EventHandler{stores: stores}
 }
 
@@ -72,7 +75,7 @@ func (h *EventHandler) GetEvents(c *gin.Context) {
 		return
 	}
 
-	events, err := db.GetEvents(startDate, endDate)
+	events, err := dbevent.GetEvents(startDate, endDate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to fetch events",
@@ -86,7 +89,7 @@ func (h *EventHandler) GetEvents(c *gin.Context) {
 func (h *EventHandler) GetEventByID(c *gin.Context) {
 	id := c.Param("id")
 
-	event, err := db.GetEventByID(id)
+	event, err := dbevent.GetEventByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -118,7 +121,7 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		return
 	}
 
-	createdEvent, err := db.CreateEvent(event)
+	createdEvent, err := dbevent.CreateEvent(event)
 	if err != nil {
 		log.Printf("CreateEvent error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -144,7 +147,7 @@ func (h *EventHandler) DeleteEventByID(c *gin.Context) {
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
-	existingEvent, err := db.GetEventByID(id)
+	existingEvent, err := dbevent.GetEventByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -157,7 +160,7 @@ func (h *EventHandler) DeleteEventByID(c *gin.Context) {
 		return
 	}
 
-	err = db.DeleteEventByID(id)
+	err = dbevent.DeleteEventByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -177,7 +180,7 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
-	existingEvent, err := db.GetEventByID(id)
+	existingEvent, err := dbevent.GetEventByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -234,7 +237,7 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 		fields["minimum_visible_role"] = updatedEvent.MinimumVisibleRole
 	}
 
-	err = db.UpdateEventByID(id, fields)
+	err = dbevent.UpdateEventByID(id, fields)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -283,7 +286,7 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 }
 
 // RegisterForEvent writes a pending registration to MongoDB, publishes a reference message to Kafka, and returns 202 Accepted.
-func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.HandlerFunc {
+func (h *EventHandler) RegisterForEvent(producer *registrationqueue.Producer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		eventID := c.Param("id")
 		if eventID == "" {
@@ -308,7 +311,7 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			return
 		}
 
-		alreadyRegistered, err := db.HasPendingOrAcceptedRegistration(eventID, payload.Registrant.UserID)
+		alreadyRegistered, err := dbregistration.HasPendingOrAcceptedRegistration(eventID, payload.Registrant.UserID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "failed to verify existing registration",
@@ -322,7 +325,7 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			return
 		}
 
-		ev, err := db.GetEventByID(eventID)
+		ev, err := dbevent.GetEventByID(eventID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "event not found",
@@ -360,7 +363,7 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			Answers:    payload.RegistrationFormAnswers,
 		}
 
-		created, err := db.CreatePendingRegistration(req)
+		created, err := dbregistration.CreatePendingRegistration(req)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "failed to create registration request",
@@ -400,7 +403,7 @@ func (h *EventHandler) JoinEventWaitlist(c *gin.Context) {
 		return
 	}
 
-	ev, err := db.GetEventByID(eventID)
+	ev, err := dbevent.GetEventByID(eventID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -422,7 +425,7 @@ func (h *EventHandler) JoinEventWaitlist(c *gin.Context) {
 		return
 	}
 
-	alreadyRegistered, err := db.HasAcceptedRegistration(eventID, userID)
+	alreadyRegistered, err := dbregistration.HasAcceptedRegistration(eventID, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to verify existing registration",
@@ -436,7 +439,7 @@ func (h *EventHandler) JoinEventWaitlist(c *gin.Context) {
 		return
 	}
 
-	alreadyWaitlisted, err := db.HasWaitlistEntry(eventID, userID)
+	alreadyWaitlisted, err := dbwaitlist.HasWaitlistEntry(eventID, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to verify existing waitlist entry",
@@ -450,7 +453,7 @@ func (h *EventHandler) JoinEventWaitlist(c *gin.Context) {
 		return
 	}
 
-	count, err := db.CountWaitlistEntries(eventID)
+	count, err := dbwaitlist.CountWaitlistEntries(eventID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to count waitlist entries",
@@ -470,7 +473,7 @@ func (h *EventHandler) JoinEventWaitlist(c *gin.Context) {
 		UserID:  userID,
 	}
 
-	if err := db.CreateWaitlistEntry(entry); err != nil {
+	if err := dbwaitlist.CreateWaitlistEntry(entry); err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			c.JSON(http.StatusConflict, gin.H{
 				"error": "user is already on the waitlist for this event",
@@ -507,7 +510,7 @@ func (h *EventHandler) GetRegistrationStatus(c *gin.Context) {
 		return
 	}
 
-	req, err := db.GetRegistrationByID(requestID)
+	req, err := dbregistration.GetRegistrationByID(requestID)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			c.JSON(http.StatusNotFound, gin.H{

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"log"
 
-	"github.com/SCE-Development/SCEvents/pkg/db"
+	"github.com/SCE-Development/SCEvents/pkg/db/stores"
 	"github.com/SCE-Development/SCEvents/pkg/models"
 	"github.com/segmentio/kafka-go"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -14,10 +14,10 @@ import (
 
 type Consumer struct {
 	reader *kafka.Reader
-	stores *db.Stores
+	stores *stores.Stores
 }
 
-func NewConsumer(brokers []string, topic string, groupID string, stores *db.Stores) *Consumer {
+func NewConsumer(brokers []string, topic string, groupID string, stores *stores.Stores) *Consumer {
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        brokers,
 		Topic:          topic,

@@ -1,4 +1,4 @@
-package db
+package redis
 
 import (
 	"context"
@@ -7,11 +7,12 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/SCE-Development/SCEvents/pkg/db/stores"
 	"github.com/alicebob/miniredis/v2"
-	"github.com/redis/go-redis/v9"
+	goredis "github.com/redis/go-redis/v9"
 )
 
-func newTestRedisStore(t *testing.T) RedisStore {
+func newTestRedisStore(t *testing.T) stores.RedisStore {
 	t.Helper()
 
 	srv, err := miniredis.Run()
@@ -19,7 +20,7 @@ func newTestRedisStore(t *testing.T) RedisStore {
 		t.Fatalf("failed to start miniredis: %v", err)
 	}
 
-	client := redis.NewClient(&redis.Options{
+	client := goredis.NewClient(&goredis.Options{
 		Addr: srv.Addr(),
 	})
 

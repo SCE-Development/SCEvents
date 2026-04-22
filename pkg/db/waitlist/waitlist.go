@@ -1,9 +1,10 @@
-package db
+package waitlist
 
 import (
 	"context"
 	"time"
 
+	dbmongo "github.com/SCE-Development/SCEvents/pkg/db/mongo"
 	"github.com/SCE-Development/SCEvents/pkg/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -11,7 +12,7 @@ import (
 )
 
 func GetWaitlistCollection() *mongo.Collection {
-	return Database().Collection("waitlists")
+	return dbmongo.Database().Collection("waitlists")
 }
 
 func InitWaitlistIndexes() error {

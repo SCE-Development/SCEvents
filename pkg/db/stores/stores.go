@@ -1,10 +1,9 @@
-package db
+package stores
 
 import (
 	"context"
 
 	"github.com/SCE-Development/SCEvents/pkg/models"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type RedisStore interface {
@@ -39,13 +38,4 @@ type Stores struct {
 	Redis RedisStore
 	Mongo MongoStore
 	Kafka KafkaProducer
-}
-
-type mongoStore struct {
-	events        *mongo.Collection
-	registrations *mongo.Collection
-}
-
-func NewMongoStore(events, registrations *mongo.Collection) MongoStore {
-	return &mongoStore{events: events, registrations: registrations}
 }

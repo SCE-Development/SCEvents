@@ -14,7 +14,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/SCE-Development/SCEvents/internal/config"
-	"github.com/SCE-Development/SCEvents/pkg/db"
+	dbmongo "github.com/SCE-Development/SCEvents/pkg/db/mongo"
+	dbredis "github.com/SCE-Development/SCEvents/pkg/db/redis"
+	"github.com/SCE-Development/SCEvents/pkg/db/stores"
+	dbwaitlist "github.com/SCE-Development/SCEvents/pkg/db/waitlist"
 	"github.com/SCE-Development/SCEvents/pkg/handlers"
 	"github.com/SCE-Development/SCEvents/pkg/middleware"
 	"github.com/SCE-Development/SCEvents/pkg/registration"
@@ -23,31 +26,31 @@ import (
 func main() {
 	cfg := config.Load()
 
-	if err := db.Connect(cfg.MongoURI); err != nil {
+	if err := dbmongo.Connect(cfg.MongoURI); err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
-	if err := db.InitWaitlistIndexes(); err != nil {
+	if err := dbwaitlist.InitWaitlistIndexes(); err != nil {
 		log.Fatalf("Failed to initialize waitlist indexes: %v", err)
 	}
 	defer func() {
-		if err := db.Disconnect(); err != nil {
+		if err := dbmongo.Disconnect(); err != nil {
 			log.Printf("Error disconnecting MongoDB: %v", err)
 		}
 	}()
 
-	if err := db.ConnectRedis(cfg.RedisAddr); err != nil {
+	if err := dbredis.ConnectRedis(cfg.RedisAddr); err != nil {
 		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
 	defer func() {
-		if err := db.DisconnectRedis(); err != nil {
+		if err := dbredis.DisconnectRedis(); err != nil {
 			log.Printf("Error disconnecting Redis: %v", err)
 		}
 	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	redisStore := db.NewRedisStore(db.RedisClient())
-	stores := &db.Stores{
+	redisStore := dbredis.NewRedisStore(dbredis.RedisClient())
+	appStores := &stores.Stores{
 		Redis: redisStore,
 	}
 
@@ -60,10 +63,10 @@ func main() {
 		[]string{cfg.KafkaBroker},
 		cfg.KafkaTopic,
 		cfg.KafkaGroupID,
-		stores,
+		appStores,
 	)
 
-	eventHandler := handlers.NewEventHandler(stores)
+	eventHandler := handlers.NewEventHandler(appStores)
 
 	var wg sync.WaitGroup
 	wg.Add(1)

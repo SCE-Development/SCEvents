@@ -1,20 +1,21 @@
-package db
+package redis
 
 import (
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/SCE-Development/SCEvents/pkg/db/stores"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 var (
-	redisClient *redis.Client
+	redisClient *goredis.Client
 )
 
 // ConnectRedis initializes the global Redis client using the provided address.
 func ConnectRedis(addr string) error {
-	redisClient = redis.NewClient(&redis.Options{
+	redisClient = goredis.NewClient(&goredis.Options{
 		Addr:     addr,
 		Password: "",
 		DB:       0,
@@ -44,15 +45,15 @@ func DisconnectRedis() error {
 }
 
 // RedisClient returns the initialized Redis client.
-func RedisClient() *redis.Client {
+func RedisClient() *goredis.Client {
 	return redisClient
 }
 
 type redisStore struct {
-	client *redis.Client
+	client *goredis.Client
 }
 
-func NewRedisStore(client *redis.Client) RedisStore {
+func NewRedisStore(client *goredis.Client) stores.RedisStore {
 	return &redisStore{client: client}
 }
 
@@ -81,7 +82,7 @@ func (s *redisStore) GetEventHeadcount(ctx context.Context, eventID string) (int
 	return s.client.Get(ctx, key).Int()
 }
 
-var takeSeatScript = redis.NewScript(`
+var takeSeatScript = goredis.NewScript(`
 local current = redis.call("GET", KEYS[1])
 if not current then
 	return -2

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SCE-Development/SCEvents/pkg/db"
+	"github.com/SCE-Development/SCEvents/pkg/db/stores"
 	"github.com/SCE-Development/SCEvents/pkg/models"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -97,9 +97,9 @@ func validKafkaMessage() []byte {
 	return b
 }
 
-func newTestConsumer(mongoStore db.MongoStore, redisStore db.RedisStore) *Consumer {
+func newTestConsumer(mongoStore stores.MongoStore, redisStore stores.RedisStore) *Consumer {
 	return &Consumer{
-		stores: &db.Stores{
+		stores: &stores.Stores{
 			Mongo: mongoStore,
 			Redis: redisStore,
 		},

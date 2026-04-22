@@ -1,4 +1,4 @@
-package db
+package mongo
 
 import (
 	"context"
@@ -72,9 +72,4 @@ func Client() *mongo.Client {
 // Database returns the initialized MongoDB database handle.
 func Database() *mongo.Database {
 	return database
-}
-
-// returns the MongoDB collection handle for the "events" collection
-func GetEventsCollection() *mongo.Collection {
-	return Database().Collection("events")
 }
