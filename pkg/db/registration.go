@@ -173,3 +173,114 @@ func MarkRegistrationRejected(requestID string, reason models.DecisionReason) er
 
 	return nil
 }
+
+func (s *mongoStore) CreatePendingRegistration(ctx context.Context, r models.RegistrationRequest) (*models.RegistrationRequest, error) {
+	now := time.Now().UTC()
+	r.Status = models.StatusPending
+	r.DecisionReason = models.ReasonNone
+	r.CreatedAt = now
+	r.UpdatedAt = now
+	r.ProcessedAt = nil
+	_, err := s.registrations.InsertOne(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (s *mongoStore) GetRegistrationByID(ctx context.Context, requestID string) (*models.RegistrationRequest, error) {
+	var r models.RegistrationRequest
+	err := s.registrations.FindOne(ctx, bson.M{"_id": requestID}).Decode(&r)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (s *mongoStore) HasAcceptedRegistration(ctx context.Context, eventID, userID string) (bool, error) {
+	filter := bson.M{
+		"event_id":           eventID,
+		"registrant.user_id": userID,
+		"status":             models.StatusAccepted,
+	}
+	err := s.registrations.FindOne(ctx, filter).Err()
+	if err == mongo.ErrNoDocuments {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *mongoStore) HasPendingOrAcceptedRegistration(ctx context.Context, eventID, userID string) (bool, error) {
+	filter := bson.M{
+		"event_id":           eventID,
+		"registrant.user_id": userID,
+		"status": bson.M{
+			"$in": []models.Status{models.StatusPending, models.StatusAccepted},
+		},
+	}
+	err := s.registrations.FindOne(ctx, filter).Err()
+	if err == mongo.ErrNoDocuments {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *mongoStore) MarkRegistrationAccepted(ctx context.Context, requestID string) error {
+	now := time.Now().UTC()
+	update := bson.M{
+		"$set": bson.M{
+			"status":          models.StatusAccepted,
+			"decision_reason": models.ReasonNone,
+			"updated_at":      now,
+			"processed_at":    now,
+		},
+	}
+	result, err := s.registrations.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":    requestID,
+			"status": models.StatusPending,
+		},
+		update,
+	)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
+}
+
+func (s *mongoStore) MarkRegistrationRejected(ctx context.Context, requestID string, reason models.DecisionReason) error {
+	now := time.Now().UTC()
+	update := bson.M{
+		"$set": bson.M{
+			"status":          models.StatusRejected,
+			"decision_reason": reason,
+			"updated_at":      now,
+			"processed_at":    now,
+		},
+	}
+	result, err := s.registrations.UpdateOne(
+		ctx,
+		bson.M{
+			"_id":    requestID,
+			"status": models.StatusPending,
+		},
+		update,
+	)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
+}

@@ -128,3 +128,81 @@ func UpdateEventByID(id string, fields map[string]interface{}) error {
 
 	return nil
 }
+
+func (s *mongoStore) GetEvents(ctx context.Context, startDate, endDate string) ([]models.Event, error) {
+	filter := bson.M{
+		"$and": bson.A{
+			bson.M{"date": bson.M{"$lte": endDate}},
+			bson.M{
+				"$or": bson.A{
+					bson.M{
+						"$and": bson.A{
+							bson.M{"$or": bson.A{
+								bson.M{"end_date": bson.M{"$exists": false}},
+								bson.M{"end_date": nil},
+								bson.M{"end_date": ""},
+							}},
+							bson.M{"date": bson.M{"$gte": startDate}},
+						},
+					},
+					bson.M{"end_date": bson.M{"$gte": startDate}},
+				},
+			},
+		},
+	}
+	cursor, err := s.events.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	events := make([]models.Event, 0)
+	if err := cursor.All(ctx, &events); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+func (s *mongoStore) GetEventByID(ctx context.Context, id string) (*models.Event, error) {
+	var e models.Event
+	err := s.events.FindOne(ctx, bson.M{"_id": id}).Decode(&e)
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+func (s *mongoStore) CreateEvent(ctx context.Context, e models.Event) (*models.Event, error) {
+	if e.ID == "" {
+		e.ID = primitive.NewObjectID().Hex()
+	}
+	_, err := s.events.InsertOne(ctx, e)
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+func (s *mongoStore) DeleteEventByID(ctx context.Context, id string) error {
+	result, err := s.events.DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		return err
+	}
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
+}
+
+func (s *mongoStore) UpdateEventByID(ctx context.Context, id string, fields map[string]interface{}) error {
+	update := bson.M{
+		"$set": fields,
+	}
+	result, err := s.events.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
+}
