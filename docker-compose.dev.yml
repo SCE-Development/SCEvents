@@ -37,8 +37,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      kafka:
-        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
     environment:
       - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017}
       - REDIS_ADDR=${REDIS_ADDR:-redis:6379}

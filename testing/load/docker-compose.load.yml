@@ -1,0 +1,17 @@
+services:
+  mock-clark:
+    build:
+      context: ./testing/integration/mock_clark
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  server:
+    environment:
+      - CLIENT_API_URL=http://mock-clark:8080
+    depends_on:
+      mock-clark:
+        condition: service_healthy
