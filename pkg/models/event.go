@@ -348,7 +348,49 @@ func (e *Event) ApplyPatch(fields map[string]interface{}) error {
 			}
 			e.WaitlistSize = int(n)
 			
-		case "admins", "registration_form":
+		case "registration_form":
+			arr, ok := value.([]interface{})
+			if !ok {
+				return fmt.Errorf("registration_form must be an array")
+			}
+			questions := make([]FormQuestion, 0, len(arr))
+			for i, item := range arr {
+				qMap, ok := item.(map[string]interface{})
+				if !ok {
+					return fmt.Errorf("registration_form[%d] must be an object", i)
+				}
+				q := FormQuestion{}
+				if id, ok := qMap["id"].(string); ok {
+					q.ID = id
+				}
+				if typ, ok := qMap["type"].(string); ok {
+					q.Type = typ
+				}
+				if question, ok := qMap["question"].(string); ok {
+					q.Question = question
+				}
+				if required, ok := qMap["required"].(bool); ok {
+					q.Required = required
+				}
+				if details, ok := qMap["answer_details"].(map[string]interface{}); ok {
+					ad := &AnswerDetails{}
+					if maxChars, ok := details["max_chars"].(float64); ok {
+						ad.MaxChars = int(maxChars)
+					}
+					q.AnswerDetails = ad
+				}
+				if opts, ok := qMap["answer_options"].([]interface{}); ok {
+					for _, opt := range opts {
+						if s, ok := opt.(string); ok {
+							q.AnswerOptions = append(q.AnswerOptions, s)
+						}
+					}
+				}
+				questions = append(questions, q)
+			}
+			e.RegistrationForm = questions
+
+		case "admins":
 			// supported by persistence model, but not yet patchable here
 			return fmt.Errorf("%s cannot be updated through this endpoint yet", key)
 		}
