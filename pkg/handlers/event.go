@@ -127,11 +127,13 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		return
 	}
 
-	if err := h.stores.Redis.SetEventHeadcount(c.Request.Context(), createdEvent.ID, createdEvent.MaxAttendees); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to store event headcount",
-		})
-		return
+	if createdEvent.MaxAttendees != -1 {
+		if err := h.stores.Redis.SetEventHeadcount(c.Request.Context(), createdEvent.ID, createdEvent.MaxAttendees); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to store event headcount",
+			})
+			return
+		}
 	}
 
 	c.JSON(http.StatusCreated, createdEvent)
@@ -252,27 +254,46 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 	// accounting for seats already given out
 	if maxAttendees, ok := fields["max_attendees"]; ok {
 		if newMax, ok := maxAttendees.(float64); ok {
-			// Get current remaining seats from Redis
-			currentRemaining, err := h.stores.Redis.GetEventHeadcount(c.Request.Context(), id)
-			if err != nil {
-				// If Redis key doesn't exist yet, no seats have been taken
-				currentRemaining = existingEvent.MaxAttendees
-			}
-
-			// Calculate how many seats have already been given out
-			seatsTaken := existingEvent.MaxAttendees - currentRemaining
-
-			// Set the new headcount: new max minus seats already taken
-			newRemaining := int(newMax) - seatsTaken
-			if newRemaining < 0 {
-				newRemaining = 0
-			}
-
-			if err := h.stores.Redis.SetEventHeadcount(c.Request.Context(), id, newRemaining); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": "event updated but failed to sync headcount in Redis",
-				})
-				return
+			newMaxInt := int(newMax)
+			switch {
+				// finite -> unlimited
+				case newMaxInt == -1:
+					if err := h.stores.Redis.DeleteEventHeadcount(c.Request.Context(), id); err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"error": "event updated but failed to clear headcount in Redis",
+						})
+						return
+					}
+	
+				// unlimited -> finite
+				case existingEvent.MaxAttendees == -1:
+					if err := h.stores.Redis.SetEventHeadcount(c.Request.Context(), id, newMaxInt); err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"error": "event updated but failed to initialize headcount in Redis",
+						})
+						return
+					}
+	
+				// finite -> finite
+				default:
+					currentRemaining, err := h.stores.Redis.GetEventHeadcount(c.Request.Context(), id)
+					if err != nil {
+						// If Redis key doesn't exist yet, assume no seats have been taken
+						currentRemaining = existingEvent.MaxAttendees
+					}
+	
+					seatsTaken := existingEvent.MaxAttendees - currentRemaining
+					newRemaining := newMaxInt - seatsTaken
+					if newRemaining < 0 {
+						newRemaining = 0
+					}
+	
+					if err := h.stores.Redis.SetEventHeadcount(c.Request.Context(), id, newRemaining); err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"error": "event updated but failed to sync headcount in Redis",
+						})
+						return
+					}
 			}
 		}
 	}
