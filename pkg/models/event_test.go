@@ -1,6 +1,112 @@
 package models
 
-import "testing"
+import (
+	"testing"
+)
+
+func TestApplyDefaults(t *testing.T) {
+	e := &Event{}
+	e.ApplyDefaults()
+
+	if e.Status != StatusDraft {
+		t.Errorf("expected StatusDraft, got %s", e.Status)
+	}
+	if e.Visibility != VisibilityPublic {
+		t.Errorf("expected VisibilityPublic, got %s", e.Visibility)
+	}
+}
+
+func TestNormalize(t *testing.T) {
+	e := &Event{
+		Status:             " " + StatusPublished + " ",
+		Visibility:         VisibilityPublic,
+		MinimumVisibleRole: RoleMember,
+		WaitlistEnabled:    false,
+		WaitlistSize:       10,
+	}
+	e.normalize()
+
+	if e.Status != StatusPublished {
+		t.Errorf("expected %s, got %s", StatusPublished, e.Status)
+	}
+	if e.MinimumVisibleRole != "" {
+		t.Errorf("expected empty MinimumVisibleRole, got %s", e.MinimumVisibleRole)
+	}
+	if e.WaitlistSize != 0 {
+		t.Errorf("expected WaitlistSize to be 0, got %d", e.WaitlistSize)
+	}
+}
+
+func TestValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		event   Event
+		wantErr bool
+	}{
+		{
+			name: "valid public event",
+			event: Event{
+				Name:       "Test",
+				Date:       "2026-05-01",
+				Time:       "10:00",
+				Location:   "Room 101",
+				Status:     StatusPublished,
+				Visibility: VisibilityPublic,
+				MaxAttendees: 50,
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing name",
+			event: Event{
+				Date:       "2026-05-01",
+				Time:       "10:00",
+				Location:   "Room 101",
+				Status:     StatusPublished,
+				Visibility: VisibilityPublic,
+				MaxAttendees: 50,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid waitlist size",
+			event: Event{
+				Name:            "Test",
+				Date:            "2026-05-01",
+				Time:            "10:00",
+				Location:        "Room 101",
+				Status:          StatusPublished,
+				Visibility:      VisibilityPublic,
+				WaitlistEnabled: true,
+				WaitlistSize:    0,
+				MaxAttendees: 50,
+			},
+			wantErr: true,
+		},
+		{
+			name: "private event without minimum role",
+			event: Event{
+				Name:       "Test",
+				Date:       "2026-05-01",
+				Time:       "10:00",
+				Location:   "Room 101",
+				Status:     StatusPublished,
+				Visibility: VisibilityPrivate,
+				MaxAttendees: 50,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.event.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
 
 func TestIsAdmin(t *testing.T) {
 	tests := []struct {
@@ -36,5 +142,117 @@ func TestIsAdmin(t *testing.T) {
 				t.Errorf("IsAdmin(%q) = %v, want %v", tc.userID, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestCanEdit(t *testing.T) {
+	e := &Event{
+		Admins: []string{"user1"},
+	}
+	if !e.CanEdit("user1", RoleMember) {
+		t.Errorf("expected true for user1")
+	}
+	if e.CanEdit("user2", RoleAdmin) {
+		t.Errorf("expected false for user2 because they are not in admins even if they are site admin when admins list is not empty")
+	}
+
+	eEmptyAdmins := &Event{}
+	if !eEmptyAdmins.CanEdit("user2", RoleAdmin) {
+		t.Errorf("expected true for user2 with admin site role when admins list is empty")
+	}
+	if eEmptyAdmins.CanEdit("user2", RoleMember) {
+		t.Errorf("expected false for user2 with member site role when admins list is empty")
+	}
+}
+
+func TestValidateRegistration(t *testing.T) {
+	e := &Event{
+		RegistrationForm: []FormQuestion{
+			{ID: "q1", Required: true},
+			{ID: "q2", Required: false},
+		},
+	}
+
+	answersValid := map[string]any{"q1": "answer1"}
+	if err := e.ValidateRegistration(answersValid); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
+	answersMissing := map[string]any{"q2": "answer2"}
+	if err := e.ValidateRegistration(answersMissing); err == nil {
+		t.Errorf("expected error for missing required answer")
+	}
+
+	answersEmpty := map[string]any{"q1": "   "}
+	if err := e.ValidateRegistration(answersEmpty); err == nil {
+		t.Errorf("expected error for empty required answer")
+	}
+}
+
+func TestSanitizeUpdateFields(t *testing.T) {
+	fields := map[string]interface{}{
+		"id":         "123",
+		"_id":        "123",
+		"created_at": "now",
+		"name":       "new name",
+	}
+
+	SanitizeUpdateFields(fields)
+
+	if _, ok := fields["id"]; ok {
+		t.Errorf("expected id to be removed")
+	}
+	if _, ok := fields["_id"]; ok {
+		t.Errorf("expected _id to be removed")
+	}
+	if _, ok := fields["created_at"]; ok {
+		t.Errorf("expected created_at to be removed")
+	}
+	if _, ok := fields["name"]; !ok {
+		t.Errorf("expected name to be kept")
+	}
+}
+
+func TestApplyPatch(t *testing.T) {
+	e := &Event{
+		Name: "Old Name",
+	}
+
+	fields := map[string]interface{}{
+		"name":             "New Name",
+		"max_attendees":    float64(100),
+		"waitlist_enabled": true,
+		"waitlist_size":    float64(50),
+	}
+
+	if err := e.ApplyPatch(fields); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
+	if e.Name != "New Name" {
+		t.Errorf("expected name to be New Name, got %s", e.Name)
+	}
+	if e.MaxAttendees != 100 {
+		t.Errorf("expected max_attendees to be 100, got %d", e.MaxAttendees)
+	}
+	if !e.WaitlistEnabled {
+		t.Errorf("expected waitlist_enabled to be true")
+	}
+	if e.WaitlistSize != 50 {
+		t.Errorf("expected waitlist_size to be 50, got %d", e.WaitlistSize)
+	}
+
+	invalidFields := map[string]interface{}{
+		"name": 123,
+	}
+	if err := e.ApplyPatch(invalidFields); err == nil {
+		t.Errorf("expected error for invalid type")
+	}
+	
+	unpatchableFields := map[string]interface{}{
+		"admins": []string{"admin1"},
+	}
+	if err := e.ApplyPatch(unpatchableFields); err == nil {
+		t.Errorf("expected error for unpatchable field admins")
 	}
 }

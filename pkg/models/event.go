@@ -122,8 +122,8 @@ func (e *Event) Validate() error {
 	if err := ValidateMinimumVisibleRole(e.Visibility, e.MinimumVisibleRole); err != nil {
 		return err
 	}
-	if e.MaxAttendees < 0 {
-		return fmt.Errorf("max_attendees cannot be negative")
+	if e.MaxAttendees == 0 || e.MaxAttendees < -1 {
+		return fmt.Errorf("max_attendees must be greater than 0, or -1 for no limit")
 	}
 
 	if e.WaitlistEnabled && e.WaitlistSize <= 0 {
