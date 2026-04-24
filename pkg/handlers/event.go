@@ -330,6 +330,13 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			return
 		}
 
+		if ev.IsAdmin(payload.Registrant.UserID) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "event admins cannot register for their own event",
+			})
+			return
+		}
+
 		if err := ev.ValidateRegistration(payload.RegistrationFormAnswers); err != nil {
 			var formErr *models.RegistrationFormValidationError
 			if errors.As(err, &formErr) {
