@@ -108,6 +108,72 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestEvent_Validate_MaxAttendees(t *testing.T) {
+	// Setup a valid base event to isolate MaxAttendees validation
+	baseEvent := func() Event {
+		return Event{
+			Name:       "Test Event",
+			Date:       "2026-05-01",
+			Time:       "10:00",
+			Location:   "Room 101",
+			Status:     StatusDraft,
+			Visibility: VisibilityPublic,
+		}
+	}
+
+	tests := []struct {
+		name         string
+		maxAttendees int
+		wantErr      bool
+		errMessage   string
+	}{
+		{
+			name:         "valid positive max attendees",
+			maxAttendees: 50,
+			wantErr:      false,
+		},
+		{
+			name:         "invalid zero max attendees",
+			maxAttendees: 0,
+			wantErr:      true,
+			errMessage:   "max_attendees must be greater than 0, or -1 for no limit",
+		},
+		{
+			name:         "valid unlimited max attendees",
+			maxAttendees: -1,
+			wantErr:      false,
+		},
+		{
+			name:         "invalid negative max attendees",
+			maxAttendees: -5,
+			wantErr:      true,
+			errMessage:   "max_attendees must be greater than 0, or -1 for no limit",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ev := baseEvent()
+			ev.MaxAttendees = tt.maxAttendees
+
+			err := ev.Validate()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error but got none")
+				}
+				if err.Error() != tt.errMessage {
+					t.Errorf("expected error message %q, got %q", tt.errMessage, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("expected no error but got: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestIsAdmin(t *testing.T) {
 	tests := []struct {
 		name   string
