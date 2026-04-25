@@ -279,6 +279,75 @@ func TestSanitizeUpdateFields(t *testing.T) {
 	}
 }
 
+func TestValidate_EndDate(t *testing.T) {
+	base := func() Event {
+		return Event{
+			Name:         "Test Event",
+			Date:         "2026-05-01",
+			Time:         "10:00",
+			Location:     "Room 101",
+			Status:       StatusDraft,
+			Visibility:   VisibilityPublic,
+			MaxAttendees: 10,
+		}
+	}
+
+	tests := []struct {
+		name    string
+		endDate string
+		wantErr string
+	}{
+		{
+			name:    "no end_date is valid",
+			endDate: "",
+			wantErr: "",
+		},
+		{
+			name:    "end_date equal to date is valid",
+			endDate: "2026-05-01",
+			wantErr: "",
+		},
+		{
+			name:    "end_date after date is valid",
+			endDate: "2026-05-02",
+			wantErr: "",
+		},
+		{
+			name:    "end_date before date returns error",
+			endDate: "2026-04-30",
+			wantErr: "end_date must be on or after start date",
+		},
+		{
+			name:    "invalid end_date format returns error",
+			endDate: "05-01-2026",
+			wantErr: "end_date is not a valid date (expected YYYY-MM-DD)",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ev := base()
+			ev.EndDate = tc.endDate
+
+			err := ev.Validate()
+
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Errorf("expected no error, got %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Errorf("expected error %q, got nil", tc.wantErr)
+				return
+			}
+			if err.Error() != tc.wantErr {
+				t.Errorf("expected error %q, got %q", tc.wantErr, err.Error())
+			}
+		})
+	}
+}
+
 func TestApplyPatch(t *testing.T) {
 	e := &Event{
 		Name: "Old Name",

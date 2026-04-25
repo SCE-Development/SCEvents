@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 const (
@@ -128,6 +129,20 @@ func (e *Event) Validate() error {
 
 	if e.WaitlistEnabled && e.WaitlistSize <= 0 {
 		return fmt.Errorf("waitlist_size must be greater than 0 when waitlist_enabled is true")
+	}
+
+	if strings.TrimSpace(e.EndDate) != "" {
+		date, err := time.Parse("2006-01-02", e.Date)
+		if err != nil {
+			return fmt.Errorf("date is not a valid date (expected YYYY-MM-DD)")
+		}
+		endDate, err := time.Parse("2006-01-02", e.EndDate)
+		if err != nil {
+			return fmt.Errorf("end_date is not a valid date (expected YYYY-MM-DD)")
+		}
+		if endDate.Before(date) {
+			return fmt.Errorf("end_date must be on or after start date")
+		}
 	}
 
 	return nil
