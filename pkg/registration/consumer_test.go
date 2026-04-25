@@ -72,6 +72,9 @@ func (m *mockRedisStore) SetEventHeadcount(_ context.Context, _ string, _ int) e
 func (m *mockRedisStore) GetEventHeadcount(_ context.Context, _ string) (int, error) {
 	return 0, nil
 }
+func (m *mockRedisStore) DeleteEventHeadcount(ctx context.Context, eventID string) error {
+	return nil
+}
 func (m *mockRedisStore) TryTakeEventSeat(_ context.Context, _ string) (bool, error) {
 	return m.seatAvailable, m.seatErr
 }

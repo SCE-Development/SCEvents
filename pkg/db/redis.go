@@ -81,6 +81,14 @@ func (s *redisStore) GetEventHeadcount(ctx context.Context, eventID string) (int
 	return s.client.Get(ctx, key).Int()
 }
 
+func (s *redisStore) DeleteEventHeadcount(ctx context.Context, eventID string) error {
+	if s.client == nil {
+		return fmt.Errorf("redis not connected")
+	}
+	key := EventHeadcountKey(eventID)
+	return s.client.Del(ctx, key).Err()
+}
+
 var takeSeatScript = redis.NewScript(`
 local current = redis.call("GET", KEYS[1])
 if not current then

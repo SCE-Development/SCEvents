@@ -100,16 +100,22 @@ func (c *Consumer) processKafkaMessage(ctx context.Context, raw []byte) error {
 		return c.stores.Mongo.MarkRegistrationRejected(ctx, msg.RequestID, models.ReasonDuplicateUser)
 	}
 
-	ok, err := c.stores.Redis.TryTakeEventSeat(ctx, msg.EventID)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return c.stores.Mongo.MarkRegistrationRejected(ctx, msg.RequestID, models.ReasonCapacityFull)
+	seatTaken := false
+	if ev.MaxAttendees != -1 {
+		ok, err := c.stores.Redis.TryTakeEventSeat(ctx, msg.EventID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return c.stores.Mongo.MarkRegistrationRejected(ctx, msg.RequestID, models.ReasonCapacityFull)
+		}
+		seatTaken = true
 	}
 
 	if err := c.stores.Mongo.MarkRegistrationAccepted(ctx, msg.RequestID); err != nil {
-		_ = c.stores.Redis.ReleaseEventSeat(ctx, msg.EventID)
+		if seatTaken {
+			_ = c.stores.Redis.ReleaseEventSeat(ctx, msg.EventID)
+		}
 		return err
 	}
 
