@@ -239,3 +239,25 @@ func TestProcessKafkaMessage_AcceptFailsReleasesSeat(t *testing.T) {
 		t.Fatal("expected ReleaseEventSeat to be called when accept fails")
 	}
 }
+
+func TestProcessKafkaMessage_EventClosed(t *testing.T) {
+	mongoMock := &mockMongoStore{
+		registration: &models.RegistrationRequest{
+			RequestID: "req-1",
+			Status:    models.StatusPending,
+		},
+		event: &models.Event{
+			ID:     "event-1",
+			Status: models.StatusClosed,
+		},
+	}
+
+	c := newTestConsumer(mongoMock, &mockRedisStore{})
+	err := c.processKafkaMessage(context.Background(), validKafkaMessage())
+	if err != nil {
+		t.Fatalf("expected nil (rejected), got %v", err)
+	}
+	if mongoMock.rejectedReason != models.ReasonEventClosed {
+		t.Fatalf("expected reason %s, got %s", models.ReasonEventClosed, mongoMock.rejectedReason)
+	}
+}

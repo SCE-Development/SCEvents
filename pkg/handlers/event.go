@@ -330,6 +330,13 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			return
 		}
 
+		if ev.Status == models.StatusClosed {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "registration is closed for this event",
+			})
+			return
+		}
+
 		if ev.IsAdmin(payload.Registrant.UserID) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error": "event admins cannot register for their own event",
