@@ -104,11 +104,11 @@ func TestRequireAuth(t *testing.T) {
 				}
 				w.WriteHeader(tt.mockAPIStatus)
 				if tt.name == "api returns invalid json" {
-					w.Write([]byte(`{invalid-json`))
+					_, _ = w.Write([]byte(`{invalid-json`))
 					return
 				}
 				if tt.mockAPIResponse != nil {
-					json.NewEncoder(w).Encode(tt.mockAPIResponse)
+					_ = json.NewEncoder(w).Encode(tt.mockAPIResponse)
 				}
 			}))
 			defer mockServer.Close()
@@ -129,7 +129,7 @@ func TestRequireAuth(t *testing.T) {
 
 			if w.Code == http.StatusOK {
 				var response map[string]string
-				json.Unmarshal(w.Body.Bytes(), &response)
+				_ = json.Unmarshal(w.Body.Bytes(), &response)
 				
 				if response["userID"] != tt.expectedUserID {
 					t.Errorf("expected userID %s, got %s", tt.expectedUserID, response["userID"])
