@@ -391,3 +391,59 @@ func TestApplyPatch(t *testing.T) {
 		t.Errorf("expected error for unpatchable field admins")
 	}
 }
+
+func TestApplyPatch_RegistrationForm(t *testing.T) {
+	e := &Event{
+		Name: "Test Event",
+	}
+
+	fields := map[string]interface{}{
+		"registration_form": []interface{}{
+			map[string]interface{}{
+				"id":       "q1",
+				"type":     "textbox",
+				"question": "What is your name?",
+				"required": true,
+				"answer_details": map[string]interface{}{
+					"max_chars": float64(200),
+				},
+			},
+			map[string]interface{}{
+				"id":             "q2",
+				"type":           "multiple_choice",
+				"question":       "Favorite color?",
+				"required":       false,
+				"answer_options": []interface{}{"Red", "Blue", "Green"},
+			},
+		},
+	}
+
+	if err := e.ApplyPatch(fields); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(e.RegistrationForm) != 2 {
+		t.Fatalf("expected 2 questions, got %d", len(e.RegistrationForm))
+	}
+
+	q1 := e.RegistrationForm[0]
+	if q1.ID != "q1" || q1.Type != "textbox" || q1.Question != "What is your name?" || !q1.Required {
+		t.Errorf("q1 fields mismatch: %+v", q1)
+	}
+	if q1.AnswerDetails == nil || q1.AnswerDetails.MaxChars != 200 {
+		t.Errorf("q1 answer_details mismatch: %+v", q1.AnswerDetails)
+	}
+
+	q2 := e.RegistrationForm[1]
+	if q2.ID != "q2" || len(q2.AnswerOptions) != 3 {
+		t.Errorf("q2 fields mismatch: %+v", q2)
+	}
+
+	// Test invalid type
+	invalidFields := map[string]interface{}{
+		"registration_form": "not an array",
+	}
+	if err := e.ApplyPatch(invalidFields); err == nil {
+		t.Errorf("expected error for invalid registration_form type")
+	}
+}
