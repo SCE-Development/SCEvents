@@ -47,8 +47,14 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	redisStore := db.NewRedisStore(db.RedisClient())
+	mongoStore := db.NewMongoStore(
+		db.GetEventsCollection(),
+		db.GetRegistrationsCollection(),
+	)
+
 	stores := &db.Stores{
 		Redis: redisStore,
+		Mongo: mongoStore,
 	}
 
 	producer := registration.NewProducer(
