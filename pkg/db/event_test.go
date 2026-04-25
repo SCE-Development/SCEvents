@@ -78,12 +78,12 @@ func TestGetEventByID(t *testing.T) {
 		store := NewMongoStore(mt.Coll, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
-			{"_id", "event-1"},
-			{"name", "Test Event"},
-			{"date", "2026-05-01"},
-			{"time", "10:00"},
-			{"location", "Room 101"},
-			{"max_attendees", int32(50)},
+			{Key: "_id", Value: "event-1"},
+			{Key: "name", Value: "Test Event"},
+			{Key: "date", Value: "2026-05-01"},
+			{Key: "time", Value: "10:00"},
+			{Key: "location", Value: "Room 101"},
+			{Key: "max_attendees", Value: int32(50)},
 		}))
 		result, err := store.GetEventByID(context.Background(), "event-1")
 		if err != nil {
@@ -113,7 +113,7 @@ func TestDeleteEventByID(t *testing.T) {
 
 	mt.Run("success", func(mt *mtest.T) {
 		store := NewMongoStore(mt.Coll, nil)
-		mt.AddMockResponses(bson.D{{"ok", 1}, {"n", int32(1)}})
+		mt.AddMockResponses(bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: int32(1)}})
 		if err := store.DeleteEventByID(context.Background(), "event-1"); err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -121,7 +121,7 @@ func TestDeleteEventByID(t *testing.T) {
 
 	mt.Run("not found", func(mt *mtest.T) {
 		store := NewMongoStore(mt.Coll, nil)
-		mt.AddMockResponses(bson.D{{"ok", 1}, {"n", int32(0)}})
+		mt.AddMockResponses(bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: int32(0)}})
 		err := store.DeleteEventByID(context.Background(), "nonexistent")
 		if err != mongo.ErrNoDocuments {
 			t.Fatalf("expected ErrNoDocuments, got %v", err)
@@ -135,9 +135,9 @@ func TestUpdateEventByID(t *testing.T) {
 	mt.Run("success", func(mt *mtest.T) {
 		store := NewMongoStore(mt.Coll, nil)
 		mt.AddMockResponses(bson.D{
-			{"ok", 1},
-			{"n", int32(1)},
-			{"nModified", int32(1)},
+			{Key: "ok", Value: 1},
+			{Key: "n", Value: int32(1)},
+			{Key: "nModified", Value: int32(1)},
 		})
 		err := store.UpdateEventByID(context.Background(), "event-1", map[string]interface{}{
 			"name": "Updated Name",
@@ -150,9 +150,9 @@ func TestUpdateEventByID(t *testing.T) {
 	mt.Run("not found", func(mt *mtest.T) {
 		store := NewMongoStore(mt.Coll, nil)
 		mt.AddMockResponses(bson.D{
-			{"ok", 1},
-			{"n", int32(0)},
-			{"nModified", int32(0)},
+			{Key: "ok", Value: 1},
+			{Key: "n", Value: int32(0)},
+			{Key: "nModified", Value: int32(0)},
 		})
 		err := store.UpdateEventByID(context.Background(), "nonexistent", map[string]interface{}{
 			"name": "Updated Name",
@@ -171,18 +171,18 @@ func TestGetEvents(t *testing.T) {
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch,
 			bson.D{
-				{"_id", "event-1"},
-				{"name", "Event One"},
-				{"date", "2026-05-01"},
-				{"time", "10:00"},
-				{"location", "Room 101"},
+				{Key: "_id", Value: "event-1"},
+				{Key: "name", Value: "Event One"},
+				{Key: "date", Value: "2026-05-01"},
+				{Key: "time", Value: "10:00"},
+				{Key: "location", Value: "Room 101"},
 			},
 			bson.D{
-				{"_id", "event-2"},
-				{"name", "Event Two"},
-				{"date", "2026-05-15"},
-				{"time", "14:00"},
-				{"location", "Room 202"},
+				{Key: "_id", Value: "event-2"},
+				{Key: "name", Value: "Event Two"},
+				{Key: "date", Value: "2026-05-15"},
+				{Key: "time", Value: "14:00"},
+				{Key: "location", Value: "Room 202"},
 			},
 		))
 		events, err := store.GetEvents(context.Background(), "2026-05-01", "2026-05-31")
