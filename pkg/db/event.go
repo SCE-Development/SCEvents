@@ -41,7 +41,9 @@ func GetEvents(startDate, endDate string) ([]models.Event, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		_ = cursor.Close(ctx)
+	}()
 
 	events := make([]models.Event, 0)
 	if err := cursor.All(ctx, &events); err != nil {
@@ -154,7 +156,9 @@ func (s *mongoStore) GetEvents(ctx context.Context, startDate, endDate string) (
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		_ = cursor.Close(ctx)
+	}()
 	events := make([]models.Event, 0)
 	if err := cursor.All(ctx, &events); err != nil {
 		return nil, err

@@ -38,7 +38,9 @@ func RequireAuth(minimumState int, clientAPIURL string) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token verification failed"})
 			return
 		}
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
