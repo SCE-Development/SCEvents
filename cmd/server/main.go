@@ -10,13 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-
 	"github.com/SCE-Development/SCEvents/internal/config"
 	"github.com/SCE-Development/SCEvents/pkg/db"
-	"github.com/SCE-Development/SCEvents/pkg/handlers"
-	"github.com/SCE-Development/SCEvents/pkg/middleware"
 	"github.com/SCE-Development/SCEvents/pkg/registration"
 )
 
@@ -46,15 +41,9 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	redisStore := db.NewRedisStore(db.RedisClient())
 	stores := &db.Stores{
-		Redis: redisStore,
+		Redis: db.NewRedisStore(db.RedisClient()),
 	}
-
-	producer := registration.NewProducer(
-		[]string{cfg.KafkaBroker},
-		cfg.KafkaTopic,
-	)
 
 	consumer := registration.NewConsumer(
 		[]string{cfg.KafkaBroker},
@@ -63,8 +52,6 @@ func main() {
 		stores,
 	)
 
-	eventHandler := handlers.NewEventHandler(stores)
-
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -72,36 +59,7 @@ func main() {
 		consumer.Run(ctx)
 	}()
 
-	r := gin.Default()
-
-	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{cfg.ClientURL}
-	config.AllowCredentials = true
-	config.AddAllowHeaders("Authorization")
-	r.Use(cors.New(config))
-
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "response",
-		})
-	})
-
-	events := r.Group("/events")
-	{
-		events.GET("/", eventHandler.GetEvents)
-		events.GET("/:id", eventHandler.GetEventByID)
-		events.GET("/registrations/:request_id", eventHandler.GetRegistrationStatus)
-
-		protected := events.Group("/")
-		protected.Use(middleware.RequireAuth(middleware.MembershipStateNonMember, cfg.ClientAPIURL))
-		{
-			protected.POST("/", eventHandler.CreateEvent)
-			protected.POST("/:id/register", eventHandler.RegisterForEvent(producer))
-			protected.POST("/:id/waitlist", eventHandler.JoinEventWaitlist)
-			protected.DELETE("/:id", eventHandler.DeleteEventByID)
-			protected.PATCH("/:id", eventHandler.UpdateEventByID)
-		}
-	}
+	r, producer := setupRouter(cfg)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.ServerPort,
