@@ -12,17 +12,7 @@ import (
 	"github.com/SCE-Development/SCEvents/pkg/models"
 )
 
-type registryEntry struct {
-	Collection string
-	Model      any
-}
 
-// registry maps CLI subcommands to a Mongo collection and the struct used for default tags.
-// Add an entry when a new collection gets fields with default tags; Go cannot infer model types from a string alone.
-var registry = map[string]registryEntry{
-	"events":        {Collection: "events", Model: models.Event{}},
-	"registrations": {Collection: "registrations", Model: models.RegistrationRequest{}},
-}
 
 func main() {
 	if len(os.Args) < 2 || strings.TrimSpace(os.Args[1]) == "" {
@@ -31,7 +21,7 @@ func main() {
 	}
 
 	key := strings.ToLower(strings.TrimSpace(os.Args[1]))
-	entry, ok := registry[key]
+	entry, ok := models.MigrationRegistry[key]
 	if !ok {
 		log.Print("Provided type doesn't exist")
 		os.Exit(1)
