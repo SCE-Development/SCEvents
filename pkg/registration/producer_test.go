@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SCE-Development/SCEvents/pkg/mocks"
 	"github.com/SCE-Development/SCEvents/pkg/models"
 )
 
@@ -101,47 +102,23 @@ func TestProducerClose(t *testing.T) {
 	})
 }
 
-type mockKafkaProducer struct {
-	publishedMessages []models.KafkaRegistrationMessage
-	publishErr        error
-	closeErr          error
-	closed            bool
-}
-
-func (m *mockKafkaProducer) PublishRegistration(_ context.Context, requestID string, eventID string, userID string) error {
-	if m.publishErr != nil {
-		return m.publishErr
-	}
-	m.publishedMessages = append(m.publishedMessages, models.KafkaRegistrationMessage{
-		RequestID: requestID,
-		EventID:   eventID,
-		UserID:    userID,
-	})
-	return nil
-}
-
-func (m *mockKafkaProducer) Close() error {
-	m.closed = true
-	return m.closeErr
-}
-
 func TestMockKafkaProducer(t *testing.T) {
 	t.Run("records published messages", func(t *testing.T) {
-		mock := &mockKafkaProducer{}
+		mock := &mocks.MockKafkaProducer{}
 		err := mock.PublishRegistration(context.Background(), "req-1", "event-1", "user-1")
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		if len(mock.publishedMessages) != 1 {
-			t.Fatalf("expected 1 message, got %d", len(mock.publishedMessages))
+		if len(mock.PublishedMessages) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(mock.PublishedMessages))
 		}
-		if mock.publishedMessages[0].RequestID != "req-1" {
-			t.Fatalf("expected request ID req-1, got %s", mock.publishedMessages[0].RequestID)
+		if mock.PublishedMessages[0].RequestID != "req-1" {
+			t.Fatalf("expected request ID req-1, got %s", mock.PublishedMessages[0].RequestID)
 		}
 	})
 
 	t.Run("returns configured error", func(t *testing.T) {
-		mock := &mockKafkaProducer{publishErr: errors.New("broker down")}
+		mock := &mocks.MockKafkaProducer{PublishErr: errors.New("broker down")}
 		err := mock.PublishRegistration(context.Background(), "req-1", "event-1", "user-1")
 		if err == nil {
 			t.Fatal("expected error")
@@ -149,18 +126,18 @@ func TestMockKafkaProducer(t *testing.T) {
 		if err.Error() != "broker down" {
 			t.Fatalf("expected 'broker down', got %q", err.Error())
 		}
-		if len(mock.publishedMessages) != 0 {
-			t.Fatalf("expected 0 messages on error, got %d", len(mock.publishedMessages))
+		if len(mock.PublishedMessages) != 0 {
+			t.Fatalf("expected 0 messages on error, got %d", len(mock.PublishedMessages))
 		}
 	})
 
 	t.Run("close tracks state", func(t *testing.T) {
-		mock := &mockKafkaProducer{}
-		if mock.closed {
+		mock := &mocks.MockKafkaProducer{}
+		if mock.Closed {
 			t.Fatal("expected closed=false before Close()")
 		}
 		_ = mock.Close()
-		if !mock.closed {
+		if !mock.Closed {
 			t.Fatal("expected closed=true after Close()")
 		}
 	})
