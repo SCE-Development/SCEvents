@@ -80,12 +80,16 @@ func (c *Consumer) processKafkaMessage(ctx context.Context, raw []byte) error {
 		return nil
 	}
 
-	_, err = c.stores.Mongo.GetEventByID(ctx, msg.EventID)
+	ev, err := c.stores.Mongo.GetEventByID(ctx, msg.EventID)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return c.stores.Mongo.MarkRegistrationRejected(ctx, msg.RequestID, models.ReasonEventNotFound)
 		}
 		return err
+	}
+
+	if ev.Status == models.StatusClosed {
+		return c.stores.Mongo.MarkRegistrationRejected(ctx, msg.RequestID, models.ReasonEventClosed)
 	}
 
 	duplicate, err := c.stores.Mongo.HasAcceptedRegistration(ctx, msg.EventID, msg.UserID)

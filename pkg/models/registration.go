@@ -19,6 +19,7 @@ const (
 	ReasonInvalidPayload   DecisionReason = "invalid_payload"
 	ReasonAlreadyProcessed DecisionReason = "already_processed"
 	ReasonInternalError    DecisionReason = "internal_error"
+	ReasonEventClosed      DecisionReason = "event_closed"
 )
 
 type Registrant struct {
