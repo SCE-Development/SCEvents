@@ -48,12 +48,12 @@ type Event struct {
 	Time               string         `bson:"time" json:"time"`
 	Location           string         `bson:"location" json:"location"`
 	Description        string         `bson:"description" json:"description"`
-	Admins             []string       `bson:"admins" json:"admins"`
-	RegistrationForm   []FormQuestion `bson:"registration_form" json:"registration_form"`
-	MaxAttendees       int            `bson:"max_attendees" json:"max_attendees"`
+	Admins             []string       `bson:"admins" json:"admins" default:"[]"`
+	RegistrationForm   []FormQuestion `bson:"registration_form" json:"registration_form" default:"[]"`
+	MaxAttendees       int            `bson:"max_attendees" json:"max_attendees" default:"0"`
 	CreatedAt          string         `bson:"created_at" json:"created_at"`
-	Status             string         `bson:"status" json:"status"`
-	Visibility         string         `bson:"visibility" json:"visibility"`
+	Status             string         `bson:"status" json:"status" default:"draft"`
+	Visibility         string         `bson:"visibility" json:"visibility" default:"public"`
 	MinimumVisibleRole string         `bson:"minimum_visible_role,omitempty" json:"minimum_visible_role,omitempty"`
 	WaitlistEnabled	   bool 		  `bson:"waitlist_enabled" json:"waitlist_enabled"`
 	WaitlistSize       int  		  `bson:"waitlist_size,omitempty" json:"waitlist_size,omitempty"`
