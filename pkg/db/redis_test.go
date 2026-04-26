@@ -97,6 +97,30 @@ func TestTryTakeEventSeatFullEvent(t *testing.T) {
 	}
 }
 
+func TestTryTakeEventSeatUnlimitedEvent(t *testing.T) {
+	store := newTestRedisStore(t)
+
+	if err := store.SetEventHeadcount(context.Background(), "event-1", -1); err != nil {
+		t.Fatalf("SetEventHeadcount failed: %v", err)
+	}
+
+	ok, err := store.TryTakeEventSeat(context.Background(), "event-1")
+	if err != nil {
+		t.Fatalf("TryTakeEventSeat failed: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected seat acquisition to succeed for unlimited event")
+	}
+
+	remaining, err := store.GetEventHeadcount(context.Background(), "event-1")
+	if err != nil {
+		t.Fatalf("GetEventHeadcount failed: %v", err)
+	}
+	if remaining != -1 {
+		t.Fatalf("expected remaining -1, got %d", remaining)
+	}
+}
+
 func TestTryTakeEventSeatMissingHeadcount(t *testing.T) {
 	store := newTestRedisStore(t)
 
@@ -128,6 +152,25 @@ func TestReleaseEventSeat(t *testing.T) {
 	}
 	if remaining != 2 {
 		t.Fatalf("expected remaining 2, got %d", remaining)
+	}
+}
+
+func TestReleaseEventSeatUnlimitedEvent(t *testing.T) {
+	store := newTestRedisStore(t)
+
+	if err := store.SetEventHeadcount(context.Background(), "event-1", -1); err != nil {
+		t.Fatalf("SetEventHeadcount failed: %v", err)
+	}
+	if err := store.ReleaseEventSeat(context.Background(), "event-1"); err != nil {
+		t.Fatalf("ReleaseEventSeat failed: %v", err)
+	}
+
+	remaining, err := store.GetEventHeadcount(context.Background(), "event-1")
+	if err != nil {
+		t.Fatalf("GetEventHeadcount failed: %v", err)
+	}
+	if remaining != -1 {
+		t.Fatalf("expected remaining -1, got %d", remaining)
 	}
 }
 

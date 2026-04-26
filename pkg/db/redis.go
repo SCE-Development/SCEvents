@@ -96,12 +96,30 @@ if not current then
 end
 
 current = tonumber(current)
-if current <= 0 then
+if current < 0 then
+	return 1
+end
+
+if current == 0 then
 	return 0
 end
 
 redis.call("DECR", KEYS[1])
 return 1
+`)
+
+var releaseSeatScript = redis.NewScript(`
+local current = redis.call("GET", KEYS[1])
+if not current then
+	return -2
+end
+
+current = tonumber(current)
+if current < 0 then
+	return current
+end
+
+return redis.call("INCR", KEYS[1])
 `)
 
 func (s *redisStore) TryTakeEventSeat(ctx context.Context, eventID string) (bool, error) {
@@ -130,7 +148,7 @@ func (s *redisStore) ReleaseEventSeat(ctx context.Context, eventID string) error
 		return fmt.Errorf("redis not connected")
 	}
 	key := EventHeadcountKey(eventID)
-	return s.client.Incr(ctx, key).Err()
+	return releaseSeatScript.Run(ctx, s.client, []string{key}).Err()
 }
 
 func (s *redisStore) IsUserRegisteredForEvent(ctx context.Context, eventID string, userID string) (bool, error) {

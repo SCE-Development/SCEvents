@@ -29,6 +29,9 @@ func main() {
 	if err := db.InitWaitlistIndexes(); err != nil {
 		log.Fatalf("Failed to initialize waitlist indexes: %v", err)
 	}
+	if err := db.InitRegistrationIndexes(); err != nil {
+		log.Fatalf("Failed to initialize registration indexes: %v", err)
+	}
 	defer func() {
 		if err := db.Disconnect(); err != nil {
 			log.Printf("Error disconnecting MongoDB: %v", err)
@@ -102,6 +105,7 @@ func main() {
 		protected.Use(middleware.RequireAuth(middleware.MembershipStateNonMember, cfg.ClientAPIURL))
 		{
 			protected.POST("/", eventHandler.CreateEvent)
+			protected.GET("/:id/attendance", eventHandler.GetEventAttendanceSummary)
 			protected.POST("/:id/register", eventHandler.RegisterForEvent(producer))
 			protected.POST("/:id/waitlist", eventHandler.JoinEventWaitlist)
 			protected.DELETE("/:id", eventHandler.DeleteEventByID)

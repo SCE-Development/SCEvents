@@ -80,6 +80,40 @@ func TestGetRegistrationByID(t *testing.T) {
 	})
 }
 
+func TestCountAcceptedRegistrationsForEvent(t *testing.T) {
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+
+	mt.Run("returns count", func(mt *mtest.T) {
+		store := NewMongoStore(nil, mt.Coll)
+		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
+		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
+			{Key: "n", Value: int32(2)},
+		}))
+		count, err := store.CountAcceptedRegistrationsForEvent(context.Background(), "event-1")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if count != 2 {
+			t.Fatalf("expected count 2, got %d", count)
+		}
+	})
+
+	mt.Run("returns zero", func(mt *mtest.T) {
+		store := NewMongoStore(nil, mt.Coll)
+		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
+		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
+			{Key: "n", Value: int32(0)},
+		}))
+		count, err := store.CountAcceptedRegistrationsForEvent(context.Background(), "event-1")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if count != 0 {
+			t.Fatalf("expected count 0, got %d", count)
+		}
+	})
+}
+
 func TestHasAcceptedRegistration(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 

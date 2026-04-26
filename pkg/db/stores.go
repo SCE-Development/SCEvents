@@ -30,6 +30,7 @@ type MongoStore interface {
 	UpdateEventByID(ctx context.Context, id string, fields map[string]interface{}) error
 	CreatePendingRegistration(ctx context.Context, r models.RegistrationRequest) (*models.RegistrationRequest, error)
 	GetRegistrationByID(ctx context.Context, requestID string) (*models.RegistrationRequest, error)
+	CountAcceptedRegistrationsForEvent(ctx context.Context, eventID string) (int64, error)
 	HasAcceptedRegistration(ctx context.Context, eventID, userID string) (bool, error)
 	HasPendingOrAcceptedRegistration(ctx context.Context, eventID, userID string) (bool, error)
 	MarkRegistrationAccepted(ctx context.Context, requestID string) error
