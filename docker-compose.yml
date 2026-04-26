@@ -3,7 +3,7 @@ services:
     image: mongo
     restart: unless-stopped
     volumes:
-      - scevents_mongodb_data:/data/db
+      - ./data/mongo:/data/db
     healthcheck:
       test: ["CMD", "mongo", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 5s
@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - scevents_redis_data:/data
+      - ./data/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -89,7 +89,3 @@ networks:
   default:
     external: true
     name: sce
-
-volumes:
-  scevents_mongodb_data:
-  scevents_redis_data:
