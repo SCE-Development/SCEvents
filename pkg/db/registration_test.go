@@ -14,7 +14,7 @@ func TestCreatePendingRegistration(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("success", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 		req := models.RegistrationRequest{
 			RequestID: "req-1",
@@ -45,7 +45,7 @@ func TestGetRegistrationByID(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("found", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
 			{Key: "_id", Value: "req-1"},
@@ -70,7 +70,7 @@ func TestGetRegistrationByID(t *testing.T) {
 	})
 
 	mt.Run("not found", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch))
 		_, err := store.GetRegistrationByID(context.Background(), "nonexistent")
@@ -84,7 +84,7 @@ func TestCountAcceptedRegistrationsForEvent(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("returns count", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
 			{Key: "n", Value: int32(2)},
@@ -99,7 +99,7 @@ func TestCountAcceptedRegistrationsForEvent(t *testing.T) {
 	})
 
 	mt.Run("returns zero", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
 			{Key: "n", Value: int32(0)},
@@ -118,7 +118,7 @@ func TestHasAcceptedRegistration(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("exists", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
 			{Key: "_id", Value: "req-1"},
@@ -135,7 +135,7 @@ func TestHasAcceptedRegistration(t *testing.T) {
 	})
 
 	mt.Run("does not exist", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch))
 		exists, err := store.HasAcceptedRegistration(context.Background(), "event-1", "user-1")
@@ -152,7 +152,7 @@ func TestHasPendingOrAcceptedRegistration(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("exists", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
 			{Key: "_id", Value: "req-1"},
@@ -169,7 +169,7 @@ func TestHasPendingOrAcceptedRegistration(t *testing.T) {
 	})
 
 	mt.Run("does not exist", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch))
 		exists, err := store.HasPendingOrAcceptedRegistration(context.Background(), "event-1", "user-1")
@@ -186,7 +186,7 @@ func TestMarkRegistrationAccepted(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("success", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		mt.AddMockResponses(bson.D{
 			{Key: "ok", Value: 1},
 			{Key: "n", Value: int32(1)},
@@ -198,7 +198,7 @@ func TestMarkRegistrationAccepted(t *testing.T) {
 	})
 
 	mt.Run("not found", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		mt.AddMockResponses(bson.D{
 			{Key: "ok", Value: 1},
 			{Key: "n", Value: int32(0)},
@@ -215,7 +215,7 @@ func TestMarkRegistrationRejected(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("success", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		mt.AddMockResponses(bson.D{
 			{Key: "ok", Value: 1},
 			{Key: "n", Value: int32(1)},
@@ -227,7 +227,7 @@ func TestMarkRegistrationRejected(t *testing.T) {
 	})
 
 	mt.Run("not found", func(mt *mtest.T) {
-		store := NewMongoStore(nil, mt.Coll)
+		store := NewMongoStore(nil, mt.Coll, nil)
 		mt.AddMockResponses(bson.D{
 			{Key: "ok", Value: 1},
 			{Key: "n", Value: int32(0)},
@@ -236,6 +236,116 @@ func TestMarkRegistrationRejected(t *testing.T) {
 		err := store.MarkRegistrationRejected(context.Background(), "nonexistent", models.ReasonCapacityFull)
 		if err != mongo.ErrNoDocuments {
 			t.Fatalf("expected ErrNoDocuments, got %v", err)
+		}
+	})
+}
+
+func TestGetRegistrationStatusesForUser(t *testing.T) {
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+
+	mt.Run("empty userID returns empty map", func(mt *mtest.T) {
+		store := NewMongoStore(nil, mt.Coll, nil)
+
+		result, err := store.GetRegistrationStatusesForUser(context.Background(), "", []string{"event-1"})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if len(result) != 0 {
+			t.Fatalf("expected empty map, got %v", result)
+		}
+	})
+
+	mt.Run("empty eventIDs returns empty map", func(mt *mtest.T) {
+		store := NewMongoStore(nil, mt.Coll, nil)
+
+		result, err := store.GetRegistrationStatusesForUser(context.Background(), "user-1", nil)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if len(result) != 0 {
+			t.Fatalf("expected empty map, got %v", result)
+		}
+	})
+
+	mt.Run("returns statuses for multiple events", func(mt *mtest.T) {
+		store := NewMongoStore(nil, mt.Coll, nil)
+		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
+
+		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch,
+			bson.D{
+				{Key: "_id", Value: "req-1"},
+				{Key: "event_id", Value: "event-1"},
+				{Key: "status", Value: "accepted"},
+				{Key: "registrant", Value: bson.D{{Key: "user_id", Value: "user-1"}}},
+			},
+			bson.D{
+				{Key: "_id", Value: "req-2"},
+				{Key: "event_id", Value: "event-2"},
+				{Key: "status", Value: "pending"},
+				{Key: "registrant", Value: bson.D{{Key: "user_id", Value: "user-1"}}},
+			},
+			bson.D{
+				{Key: "_id", Value: "req-3"},
+				{Key: "event_id", Value: "event-3"},
+				{Key: "status", Value: "rejected"},
+				{Key: "registrant", Value: bson.D{{Key: "user_id", Value: "user-1"}}},
+			},
+		))
+
+		result, err := store.GetRegistrationStatusesForUser(context.Background(), "user-1", []string{"event-1", "event-2", "event-3"})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		expected := map[string]models.Status{
+			"event-1": models.StatusAccepted,
+			"event-2": models.StatusPending,
+			"event-3": models.StatusRejected,
+		}
+
+		if len(result) != len(expected) {
+			t.Fatalf("expected %d statuses, got %d", len(expected), len(result))
+		}
+
+		for eventID, status := range expected {
+			if result[eventID] != status {
+				t.Fatalf("expected %s => %s, got %s", eventID, status, result[eventID])
+			}
+		}
+	})
+
+	mt.Run("strongest status wins for same event", func(mt *mtest.T) {
+		store := NewMongoStore(nil, mt.Coll, nil)
+		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
+
+		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch,
+			bson.D{
+				{Key: "_id", Value: "req-1"},
+				{Key: "event_id", Value: "event-1"},
+				{Key: "status", Value: "rejected"},
+				{Key: "registrant", Value: bson.D{{Key: "user_id", Value: "user-1"}}},
+			},
+			bson.D{
+				{Key: "_id", Value: "req-2"},
+				{Key: "event_id", Value: "event-1"},
+				{Key: "status", Value: "pending"},
+				{Key: "registrant", Value: bson.D{{Key: "user_id", Value: "user-1"}}},
+			},
+			bson.D{
+				{Key: "_id", Value: "req-3"},
+				{Key: "event_id", Value: "event-1"},
+				{Key: "status", Value: "accepted"},
+				{Key: "registrant", Value: bson.D{{Key: "user_id", Value: "user-1"}}},
+			},
+		))
+
+		result, err := store.GetRegistrationStatusesForUser(context.Background(), "user-1", []string{"event-1"})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if result["event-1"] != models.StatusAccepted {
+			t.Fatalf("expected event-1 => accepted, got %s", result["event-1"])
 		}
 	})
 }

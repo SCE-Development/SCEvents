@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/SCE-Development/SCEvents/pkg/models"
@@ -20,12 +21,21 @@ func InitRegistrationIndexes() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := coll.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{
-			{Key: "event_id", Value: 1},
-			{Key: "status", Value: 1},
+	_, err := coll.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "event_id", Value: 1},
+				{Key: "status", Value: 1},
+			},
+			Options: options.Index().SetName("event_id_status"),
 		},
-		Options: options.Index().SetName("event_id_status"),
+		{
+			Keys: bson.D{
+				{Key: "registrant.user_id", Value: 1},
+				{Key: "event_id", Value: 1},
+			},
+			Options: options.Index().SetName("registrant_user_event"),
+		},
 	})
 	return err
 }
@@ -319,4 +329,56 @@ func (s *mongoStore) MarkRegistrationRejected(ctx context.Context, requestID str
 		return mongo.ErrNoDocuments
 	}
 	return nil
+}
+
+// Higher values win when multiple registration records exist for the same user-event pair
+func registrationStatusPriority(status models.Status) int {
+	switch status {
+	case models.StatusAccepted:
+		return 3
+	case models.StatusPending:
+		return 2
+	case models.StatusRejected:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// GetRegistrationStatusesForUser batch-loads the caller's strongest registration state for each event
+func (s *mongoStore) GetRegistrationStatusesForUser(ctx context.Context, userID string, eventIDs []string) (map[string]models.Status, error) {
+	result := make(map[string]models.Status)
+
+	if strings.TrimSpace(userID) == "" || len(eventIDs) == 0 {
+		return result, nil
+	}
+
+	filter := bson.M{
+		"registrant.user_id": userID,
+		"event_id": bson.M{
+			"$in": eventIDs,
+		},
+	}
+
+	cursor, err := s.registrations.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = cursor.Close(ctx)
+	}()
+
+	var requests []models.RegistrationRequest
+	if err := cursor.All(ctx, &requests); err != nil {
+		return nil, err
+	}
+
+	for _, req := range requests {
+		current, exists := result[req.EventID]
+		if !exists || registrationStatusPriority(req.Status) > registrationStatusPriority(current) {
+			result[req.EventID] = req.Status
+		}
+	}
+
+	return result, nil
 }

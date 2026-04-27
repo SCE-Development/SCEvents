@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/SCE-Development/SCEvents/pkg/models"
@@ -82,4 +83,39 @@ func CountWaitlistEntries(eventID string) (int64, error) {
 	}
 
 	return coll.CountDocuments(ctx, filter)
+}
+
+// GetWaitlistedEventIDsForUser returns a set of event IDs the user is currently waitlisted for
+func (s *mongoStore) GetWaitlistedEventIDsForUser(ctx context.Context, userID string, eventIDs []string) (map[string]bool, error) {
+	result := make(map[string]bool)
+
+	if strings.TrimSpace(userID) == "" || len(eventIDs) == 0 {
+		return result, nil
+	}
+
+	filter := bson.M{
+		"user_id": userID,
+		"event_id": bson.M{
+			"$in": eventIDs,
+		},
+	}
+
+	cursor, err := s.waitlists.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = cursor.Close(ctx)
+	}()
+
+	var entries []models.WaitlistEntry
+	if err := cursor.All(ctx, &entries); err != nil {
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		result[entry.EventID] = true
+	}
+
+	return result, nil
 }

@@ -5,6 +5,7 @@ import "time"
 type Status string
 type DecisionReason string
 
+// Status values describe the lifecycle of a registration request in persistence
 const (
 	StatusPending  Status = "pending"
 	StatusAccepted Status = "accepted"

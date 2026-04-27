@@ -189,3 +189,383 @@ func TestSyncMaxAttendeesHeadcount_FiniteToFinite(t *testing.T) {
 		t.Fatalf("expected remaining capacity 9, got %d", redis.SetCapacity)
 	}
 }
+
+func newEventReadTestRouter(mongoStore db.MongoStore, userID string) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := NewEventHandler(&db.Stores{Mongo: mongoStore})
+
+	router.Use(func(c *gin.Context) {
+		if userID != "" {
+			c.Set("userID", userID)
+		}
+		c.Next()
+	})
+
+	router.GET("/events", handler.GetEvents)
+	router.GET("/events/:id", handler.GetEventByID)
+
+	return router
+}
+
+func TestGetEvents_Unauthenticated_OmitsRegistrationStatus(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{
+		Events: []models.Event{
+			{ID: "event-1", Name: "Hack Night"},
+		},
+	}
+	router := newEventReadTestRouter(mongoStore, "")
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var body []map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if len(body) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(body))
+	}
+
+	if _, ok := body[0]["registration_status"]; ok {
+		t.Fatalf("expected registration_status to be omitted, got %v", body[0]["registration_status"])
+	}
+}
+
+func TestGetEvents_Authenticated_ReturnsRegistrationStatus(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{
+		Events: []models.Event{
+			{ID: "event-1", Name: "Hack Night"},
+			{ID: "event-2", Name: "Company Tour"},
+			{ID: "event-3", Name: "Workshop"},
+		},
+		RegistrationStatuses: map[string]models.Status{
+			"event-1": models.StatusAccepted,
+			"event-2": models.StatusPending,
+			"event-3": models.StatusRejected,
+		},
+		WaitlistedEventIDs: map[string]bool{},
+	}
+	router := newEventReadTestRouter(mongoStore, "user-1")
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var body []map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	got := map[string]string{}
+	for _, event := range body {
+		got[event["id"].(string)] = event["registration_status"].(string)
+	}
+
+	if got["event-1"] != "registered" {
+		t.Fatalf("expected event-1 registered, got %s", got["event-1"])
+	}
+	if got["event-2"] != "pending" {
+		t.Fatalf("expected event-2 pending, got %s", got["event-2"])
+	}
+	if got["event-3"] != "rejected" {
+		t.Fatalf("expected event-3 rejected, got %s", got["event-3"])
+	}
+}
+
+func TestGetEvents_Authenticated_WaitlistOverridesRejected(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{
+		Events: []models.Event{
+			{ID: "event-1", Name: "Hack Night"},
+		},
+		RegistrationStatuses: map[string]models.Status{
+			"event-1": models.StatusRejected,
+		},
+		WaitlistedEventIDs: map[string]bool{
+			"event-1": true,
+		},
+	}
+	router := newEventReadTestRouter(mongoStore, "user-1")
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var body []map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if body[0]["registration_status"] != "waitlisted" {
+		t.Fatalf("expected waitlisted, got %v", body[0]["registration_status"])
+	}
+}
+
+func TestGetEvents_Authenticated_WaitlistOnly(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{
+		Events: []models.Event{
+			{ID: "event-1", Name: "Hack Night"},
+		},
+		RegistrationStatuses: map[string]models.Status{},
+		WaitlistedEventIDs: map[string]bool{
+			"event-1": true,
+		},
+	}
+	router := newEventReadTestRouter(mongoStore, "user-1")
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var body []map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if body[0]["registration_status"] != "waitlisted" {
+		t.Fatalf("expected waitlisted, got %v", body[0]["registration_status"])
+	}
+}
+
+func TestGetEvents_Authenticated_NoStatus_ReturnsNone(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{
+		Events: []models.Event{
+			{ID: "event-1", Name: "Hack Night"},
+		},
+		RegistrationStatuses: map[string]models.Status{},
+		WaitlistedEventIDs:   map[string]bool{},
+	}
+	router := newEventReadTestRouter(mongoStore, "user-1")
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var body []map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if body[0]["registration_status"] != "none" {
+		t.Fatalf("expected none, got %v", body[0]["registration_status"])
+	}
+}
+
+func TestGetEvents_Returns500_WhenRegistrationLookupFails(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{
+		Events:                  []models.Event{{ID: "event-1", Name: "Hack Night"}},
+		RegistrationStatusesErr: errors.New("boom"),
+	}
+	router := newEventReadTestRouter(mongoStore, "user-1")
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", w.Code)
+	}
+}
+
+func TestGetEvents_Returns500_WhenWaitlistLookupFails(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{
+		Events:              []models.Event{{ID: "event-1", Name: "Hack Night"}},
+		RegistrationStatuses: map[string]models.Status{},
+		WaitlistedEventIDsErr: errors.New("boom"),
+	}
+	router := newEventReadTestRouter(mongoStore, "user-1")
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", w.Code)
+	}
+}
+
+func TestGetEventByID_Unauthenticated_OmitsRegistrationStatus(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{
+		Event: &models.Event{ID: "event-1", Name: "Hack Night"},
+	}
+	router := newEventReadTestRouter(mongoStore, "")
+
+	req := httptest.NewRequest(http.MethodGet, "/events/event-1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if _, ok := body["registration_status"]; ok {
+		t.Fatalf("expected registration_status to be omitted, got %v", body["registration_status"])
+	}
+}
+
+func TestGetEventByID_Authenticated_ReturnsRegistered(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{
+		Event: &models.Event{ID: "event-1", Name: "Hack Night"},
+		RegistrationStatuses: map[string]models.Status{
+			"event-1": models.StatusAccepted,
+		},
+		WaitlistedEventIDs: map[string]bool{},
+	}
+	router := newEventReadTestRouter(mongoStore, "user-1")
+
+	req := httptest.NewRequest(http.MethodGet, "/events/event-1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if body["registration_status"] != "registered" {
+		t.Fatalf("expected registered, got %v", body["registration_status"])
+	}
+}
+
+func TestGetEventByID_Authenticated_ReturnsWaitlisted(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{
+		Event: &models.Event{ID: "event-1", Name: "Hack Night"},
+		RegistrationStatuses: map[string]models.Status{
+			"event-1": models.StatusRejected,
+		},
+		WaitlistedEventIDs: map[string]bool{
+			"event-1": true,
+		},
+	}
+	router := newEventReadTestRouter(mongoStore, "user-1")
+
+	req := httptest.NewRequest(http.MethodGet, "/events/event-1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if body["registration_status"] != "waitlisted" {
+		t.Fatalf("expected waitlisted, got %v", body["registration_status"])
+	}
+}
+
+func TestGetEventByID_NotFound(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{
+		EventErr: mongo.ErrNoDocuments,
+	}
+	router := newEventReadTestRouter(mongoStore, "user-1")
+
+	req := httptest.NewRequest(http.MethodGet, "/events/event-1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", w.Code)
+	}
+}
+
+func TestResolveEventRegistrationStatus(t *testing.T) {
+	tests := []struct {
+		name                 string
+		registrationStatuses map[string]models.Status
+		waitlistedEventIDs   map[string]bool
+		expected             EventRegistrationStatus
+	}{
+		{
+			name: "accepted -> registered",
+			registrationStatuses: map[string]models.Status{
+				"event-1": models.StatusAccepted,
+			},
+			waitlistedEventIDs: map[string]bool{},
+			expected:           EventRegistrationStatusRegistered,
+		},
+		{
+			name: "pending -> pending",
+			registrationStatuses: map[string]models.Status{
+				"event-1": models.StatusPending,
+			},
+			waitlistedEventIDs: map[string]bool{},
+			expected:           EventRegistrationStatusPending,
+		},
+		{
+			name: "rejected -> rejected",
+			registrationStatuses: map[string]models.Status{
+				"event-1": models.StatusRejected,
+			},
+			waitlistedEventIDs: map[string]bool{},
+			expected:           EventRegistrationStatusRejected,
+		},
+		{
+			name: "rejected + waitlisted -> waitlisted",
+			registrationStatuses: map[string]models.Status{
+				"event-1": models.StatusRejected,
+			},
+			waitlistedEventIDs: map[string]bool{
+				"event-1": true,
+			},
+			expected: EventRegistrationStatusWaitlisted,
+		},
+		{
+			name:                 "waitlist only -> waitlisted",
+			registrationStatuses: map[string]models.Status{},
+			waitlistedEventIDs: map[string]bool{
+				"event-1": true,
+			},
+			expected: EventRegistrationStatusWaitlisted,
+		},
+		{
+			name:                 "nothing -> none",
+			registrationStatuses: map[string]models.Status{},
+			waitlistedEventIDs:   map[string]bool{},
+			expected:             EventRegistrationStatusNone,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := resolveEventRegistrationStatus("event-1", tt.registrationStatuses, tt.waitlistedEventIDs)
+			if result != tt.expected {
+				t.Fatalf("expected %s, got %s", tt.expected, result)
+			}
+		})
+	}
+}

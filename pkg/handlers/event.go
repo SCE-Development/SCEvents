@@ -27,6 +27,37 @@ func NewEventHandler(stores *db.Stores) *EventHandler {
 
 const dateLayout = "2006-01-02"
 
+// EventRegistrationStatus is the UI-facing per-user status attached to event responses
+type EventRegistrationStatus string
+
+const (
+	EventRegistrationStatusNone       EventRegistrationStatus = "none"
+	EventRegistrationStatusPending    EventRegistrationStatus = "pending"
+	EventRegistrationStatusRegistered EventRegistrationStatus = "registered"
+	EventRegistrationStatusWaitlisted EventRegistrationStatus = "waitlisted"
+	EventRegistrationStatusRejected   EventRegistrationStatus = "rejected"
+)
+
+type EventResponse struct {
+	ID                 string                    `json:"id"`
+	Name               string                    `json:"name"`
+	Date               string                    `json:"date"`
+	EndDate            string                    `json:"end_date,omitempty"`
+	Time               string                    `json:"time"`
+	Location           string                    `json:"location"`
+	Description        string                    `json:"description"`
+	Admins             []string                  `json:"admins"`
+	RegistrationForm   []models.FormQuestion     `json:"registration_form"`
+	MaxAttendees       int                       `json:"max_attendees"`
+	CreatedAt          string                    `json:"created_at"`
+	Status             string                    `json:"status"`
+	Visibility         string                    `json:"visibility"`
+	MinimumVisibleRole string                    `json:"minimum_visible_role,omitempty"`
+	WaitlistEnabled    bool                      `json:"waitlist_enabled"`
+	WaitlistSize       int                       `json:"waitlist_size,omitempty"`
+	RegistrationStatus *EventRegistrationStatus  `json:"registration_status,omitempty"`
+}
+
 func writeEventEditForbidden(c *gin.Context, ev *models.Event) {
 	if len(ev.Admins) == 0 {
 		c.JSON(http.StatusForbidden, gin.H{
@@ -73,21 +104,47 @@ func (h *EventHandler) GetEvents(c *gin.Context) {
 		return
 	}
 
-	events, err := db.GetEvents(startDate, endDate)
+	events, err := h.stores.Mongo.GetEvents(c.Request.Context(), startDate, endDate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to fetch events",
 		})
 		return
 	}
-	c.JSON(http.StatusOK, events)
+
+	userID := strings.TrimSpace(c.GetString("userID"))
+	if userID == "" {
+		c.JSON(http.StatusOK, buildEventResponses(events, "", nil, nil))
+		return
+	}
+
+	eventIDs := collectEventIDs(events)
+
+	registrationStatuses, err := h.stores.Mongo.GetRegistrationStatusesForUser(c.Request.Context(), userID, eventIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch registration statuses",
+		})
+		return
+	}
+
+	waitlistedEventIDs, err := h.stores.Mongo.GetWaitlistedEventIDsForUser(c.Request.Context(), userID, eventIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch waitlist statuses",
+		})
+		return
+	}
+
+	responses := buildEventResponses(events, userID, registrationStatuses, waitlistedEventIDs)
+	c.JSON(http.StatusOK, responses)
 }
 
 // returns a single event by ID
 func (h *EventHandler) GetEventByID(c *gin.Context) {
 	id := c.Param("id")
 
-	event, err := db.GetEventByID(id)
+	event, err := h.stores.Mongo.GetEventByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -95,7 +152,34 @@ func (h *EventHandler) GetEventByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, event)
+	userID := strings.TrimSpace(c.GetString("userID"))
+	if userID == "" {
+		c.JSON(http.StatusOK, buildEventResponse(*event, nil))
+		return
+	}
+
+	eventIDs := []string{event.ID}
+
+	registrationStatuses, err := h.stores.Mongo.GetRegistrationStatusesForUser(c.Request.Context(), userID, eventIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch registration status",
+		})
+		return
+	}
+
+	waitlistedEventIDs, err := h.stores.Mongo.GetWaitlistedEventIDsForUser(c.Request.Context(), userID, eventIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch waitlist status",
+		})
+		return
+	}
+
+	status := resolveEventRegistrationStatus(event.ID, registrationStatuses, waitlistedEventIDs)
+	statusCopy := status
+
+	c.JSON(http.StatusOK, buildEventResponse(*event, &statusCopy))
 }
 
 func (h *EventHandler) GetEventAttendanceSummary(c *gin.Context) {
@@ -631,4 +715,84 @@ func (h *EventHandler) GetRegistrationStatus(c *gin.Context) {
 		"updated_at":      req.UpdatedAt,
 		"processed_at":    req.ProcessedAt,
 	})
+}
+
+// buildEventResponses attaches registration_status only when user context is available
+func buildEventResponse(event models.Event, registrationStatus *EventRegistrationStatus) EventResponse {
+	return EventResponse{
+		ID:                 event.ID,
+		Name:               event.Name,
+		Date:               event.Date,
+		EndDate:            event.EndDate,
+		Time:               event.Time,
+		Location:           event.Location,
+		Description:        event.Description,
+		Admins:             event.Admins,
+		RegistrationForm:   event.RegistrationForm,
+		MaxAttendees:       event.MaxAttendees,
+		CreatedAt:          event.CreatedAt,
+		Status:             event.Status,
+		Visibility:         event.Visibility,
+		MinimumVisibleRole: event.MinimumVisibleRole,
+		WaitlistEnabled:    event.WaitlistEnabled,
+		WaitlistSize:       event.WaitlistSize,
+		RegistrationStatus: registrationStatus,
+	}
+}
+
+// resolveEventRegistrationStatus maps persisted registration/waitlist records into one UI-facing status
+func resolveEventRegistrationStatus(
+	eventID string,
+	registrationStatuses map[string]models.Status,
+	waitlistedEventIDs map[string]bool,
+) EventRegistrationStatus {
+	if status, ok := registrationStatuses[eventID]; ok {
+		switch status {
+		case models.StatusAccepted:
+			return EventRegistrationStatusRegistered
+		case models.StatusPending:
+			return EventRegistrationStatusPending
+		case models.StatusRejected:
+			if waitlistedEventIDs[eventID] {
+				return EventRegistrationStatusWaitlisted
+			}
+			return EventRegistrationStatusRejected
+		}
+	}
+
+	if waitlistedEventIDs[eventID] {
+		return EventRegistrationStatusWaitlisted
+	}
+
+	return EventRegistrationStatusNone
+}
+
+func collectEventIDs(events []models.Event) []string {
+	ids := make([]string, 0, len(events))
+	for _, event := range events {
+		ids = append(ids, event.ID)
+	}
+	return ids
+}
+
+func buildEventResponses(
+	events []models.Event,
+	userID string,
+	registrationStatuses map[string]models.Status,
+	waitlistedEventIDs map[string]bool,
+) []EventResponse {
+	responses := make([]EventResponse, 0, len(events))
+
+	for _, event := range events {
+		if strings.TrimSpace(userID) == "" {
+			responses = append(responses, buildEventResponse(event, nil))
+			continue
+		}
+
+		status := resolveEventRegistrationStatus(event.ID, registrationStatuses, waitlistedEventIDs)
+		statusCopy := status
+		responses = append(responses, buildEventResponse(event, &statusCopy))
+	}
+
+	return responses
 }
