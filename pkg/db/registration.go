@@ -256,7 +256,9 @@ func (s *mongoStore) ListRegistrationsByEventID(ctx context.Context, eventID str
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		_ = cursor.Close(ctx)
+	}()
 
 	registrations := make([]models.RegistrationRequest, 0)
 	if err := cursor.All(ctx, &registrations); err != nil {
