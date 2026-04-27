@@ -8,7 +8,11 @@ import (
 
 type MockMongoStore struct {
 	Registration               *models.RegistrationRequest
+	Registrations              []models.RegistrationRequest
 	RegistrationErr            error
+	RegistrationsErr           error
+	StatusCounts               map[models.Status]int64
+	StatusCountsErr            error
 	Event                      *models.Event
 	EventErr                   error
 	AttendeeCount              int64
@@ -47,6 +51,22 @@ func (m *MockMongoStore) CreatePendingRegistration(_ context.Context, r models.R
 }
 func (m *MockMongoStore) GetRegistrationByID(_ context.Context, _ string) (*models.RegistrationRequest, error) {
 	return m.Registration, m.RegistrationErr
+}
+func (m *MockMongoStore) ListRegistrationsByEventID(_ context.Context, _ string, _, _ int64) ([]models.RegistrationRequest, error) {
+	return m.Registrations, m.RegistrationsErr
+}
+func (m *MockMongoStore) GetRegistrationByEventAndRequestID(_ context.Context, _, _ string) (*models.RegistrationRequest, error) {
+	return m.Registration, m.RegistrationErr
+}
+func (m *MockMongoStore) CountRegistrationsByStatusForEvent(_ context.Context, _ string) (map[models.Status]int64, error) {
+	if m.StatusCounts == nil {
+		return map[models.Status]int64{
+			models.StatusPending:  0,
+			models.StatusAccepted: 0,
+			models.StatusRejected: 0,
+		}, m.StatusCountsErr
+	}
+	return m.StatusCounts, m.StatusCountsErr
 }
 func (m *MockMongoStore) CountAcceptedRegistrationsForEvent(_ context.Context, _ string) (int64, error) {
 	m.CountCalled = true
