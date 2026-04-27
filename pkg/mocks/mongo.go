@@ -11,6 +11,9 @@ type MockMongoStore struct {
 	RegistrationErr error
 	Event           *models.Event
 	EventErr        error
+	AttendeeCount   int64
+	AttendeeCountErr error
+	CountCalled     bool
 	HasAccepted     bool
 	HasAcceptedErr  error
 	MarkAcceptedErr error
@@ -38,6 +41,10 @@ func (m *MockMongoStore) CreatePendingRegistration(_ context.Context, r models.R
 }
 func (m *MockMongoStore) GetRegistrationByID(_ context.Context, _ string) (*models.RegistrationRequest, error) {
 	return m.Registration, m.RegistrationErr
+}
+func (m *MockMongoStore) CountAcceptedRegistrationsForEvent(_ context.Context, _ string) (int64, error) {
+	m.CountCalled = true
+	return m.AttendeeCount, m.AttendeeCountErr
 }
 func (m *MockMongoStore) HasAcceptedRegistration(_ context.Context, _, _ string) (bool, error) {
 	return m.HasAccepted, m.HasAcceptedErr

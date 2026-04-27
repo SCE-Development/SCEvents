@@ -98,6 +98,43 @@ func (h *EventHandler) GetEventByID(c *gin.Context) {
 	c.JSON(http.StatusOK, event)
 }
 
+func (h *EventHandler) GetEventAttendanceSummary(c *gin.Context) {
+	eventID := strings.TrimSpace(c.Param("id"))
+	if eventID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "event id is required",
+		})
+		return
+	}
+
+	_, err := h.stores.Mongo.GetEventByID(c.Request.Context(), eventID)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "event not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch event",
+		})
+		return
+	}
+
+	attendeeCount, err := h.stores.Mongo.CountAcceptedRegistrationsForEvent(c.Request.Context(), eventID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch attendance summary",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"event_id":        eventID,
+		"attendee_count": attendeeCount,
+	})
+}
+
 // creates a new event
 func (h *EventHandler) CreateEvent(c *gin.Context) {
 	var event models.Event
@@ -191,9 +228,11 @@ func (h *EventHandler) syncMaxAttendeesHeadcount(ctx context.Context, id string,
 
 	switch {
 	case newMaxInt == -1:
+		// Unlimited events are not headcount-tracked in Redis.
 		return h.stores.Redis.DeleteEventHeadcount(ctx, id)
 
 	case existingEvent.MaxAttendees == -1:
+		// Moving from unlimited to limited starts Redis tracking at the new max.
 		return h.stores.Redis.SetEventHeadcount(ctx, id, newMaxInt)
 
 	default:
@@ -205,6 +244,7 @@ func (h *EventHandler) syncMaxAttendeesHeadcount(ctx context.Context, id string,
 		seatsTaken := existingEvent.MaxAttendees - currentRemaining
 		newRemaining := newMaxInt - seatsTaken
 		if newRemaining < 0 {
+			// Event already exceeds the new cap; remaining seats cannot be negative.
 			newRemaining = 0
 		}
 
@@ -404,14 +444,32 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			return
 		}
 
-		if err := producer.PublishRegistration(c.Request.Context(), created.RequestID, eventID, payload.Registrant.UserID); err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"error": "failed to queue registration for processing",
+		seatTaken, err := h.stores.Redis.TryTakeEventSeat(c.Request.Context(), eventID)
+		if err != nil {
+			_ = db.MarkRegistrationRejected(created.RequestID, models.ReasonInternalError)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to reserve event seat",
+			})
+			return
+		}
+		if !seatTaken {
+			_ = db.MarkRegistrationRejected(created.RequestID, models.ReasonCapacityFull)
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "event is full",
 			})
 			return
 		}
 
-		c.JSON(http.StatusAccepted, gin.H{
+		if err := db.MarkRegistrationAccepted(created.RequestID); err != nil {
+			_ = h.stores.Redis.ReleaseEventSeat(c.Request.Context(), eventID)
+			_ = db.MarkRegistrationRejected(created.RequestID, models.ReasonInternalError)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to send registration request",
+			})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{
 			"message":    "registration request sent",
 			"event_id":   eventID,
 			"request_id": created.RequestID,

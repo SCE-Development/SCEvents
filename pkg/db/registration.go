@@ -7,10 +7,27 @@ import (
 	"github.com/SCE-Development/SCEvents/pkg/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func GetRegistrationsCollection() *mongo.Collection {
 	return Database().Collection("registrations")
+}
+
+func InitRegistrationIndexes() error {
+	coll := GetRegistrationsCollection()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := coll.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "event_id", Value: 1},
+			{Key: "status", Value: 1},
+		},
+		Options: options.Index().SetName("event_id_status"),
+	})
+	return err
 }
 
 // CreatePendingRegistration inserts a new registration request with status "pending" before async processing
@@ -49,6 +66,18 @@ func GetRegistrationByID(requestID string) (*models.RegistrationRequest, error) 
 	}
 
 	return &r, nil
+}
+
+func CountAcceptedRegistrationsForEvent(eventID string) (int64, error) {
+	coll := GetRegistrationsCollection()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return coll.CountDocuments(ctx, bson.M{
+		"event_id": eventID,
+		"status":   models.StatusAccepted,
+	})
 }
 
 // HasAcceptedRegistration checks if a user already has an accepted registration for an event
@@ -195,6 +224,13 @@ func (s *mongoStore) GetRegistrationByID(ctx context.Context, requestID string) 
 		return nil, err
 	}
 	return &r, nil
+}
+
+func (s *mongoStore) CountAcceptedRegistrationsForEvent(ctx context.Context, eventID string) (int64, error) {
+	return s.registrations.CountDocuments(ctx, bson.M{
+		"event_id": eventID,
+		"status":   models.StatusAccepted,
+	})
 }
 
 func (s *mongoStore) HasAcceptedRegistration(ctx context.Context, eventID, userID string) (bool, error) {
