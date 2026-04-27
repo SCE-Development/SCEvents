@@ -35,6 +35,8 @@ type MongoStore interface {
 	HasPendingOrAcceptedRegistration(ctx context.Context, eventID, userID string) (bool, error)
 	MarkRegistrationAccepted(ctx context.Context, requestID string) error
 	MarkRegistrationRejected(ctx context.Context, requestID string, reason models.DecisionReason) error
+	GetRegistrationStatusesForUser(ctx context.Context, userID string, eventIDs []string) (map[string]models.Status, error)
+	GetWaitlistedEventIDsForUser(ctx context.Context, userID string, eventIDs []string) (map[string]bool, error)
 }
 
 type Stores struct {
@@ -46,8 +48,14 @@ type Stores struct {
 type mongoStore struct {
 	events        *mongo.Collection
 	registrations *mongo.Collection
+	waitlists     *mongo.Collection
 }
 
-func NewMongoStore(events, registrations *mongo.Collection) MongoStore {
-	return &mongoStore{events: events, registrations: registrations}
+// Batch user-event lookups used to enrich event responses with per-user registration state
+func NewMongoStore(events, registrations, waitlists *mongo.Collection) MongoStore {
+	return &mongoStore{
+		events:        events,
+		registrations: registrations,
+		waitlists:     waitlists,
+	}
 }

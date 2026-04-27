@@ -53,6 +53,7 @@ func main() {
 	mongoStore := db.NewMongoStore(
 		db.GetEventsCollection(),
 		db.GetRegistrationsCollection(),
+		db.GetWaitlistCollection(),
 	)
 
 	stores := &db.Stores{
@@ -96,10 +97,12 @@ func main() {
 	})
 
 	events := r.Group("/events")
+	// public event reads can use optional auth so authenticated callers receive personalized event metadata
+	events.Use(middleware.OptionalAuth(cfg.ClientAPIURL))
 	{
+		events.GET("/registrations/:request_id", eventHandler.GetRegistrationStatus)
 		events.GET("/", eventHandler.GetEvents)
 		events.GET("/:id", eventHandler.GetEventByID)
-		events.GET("/registrations/:request_id", eventHandler.GetRegistrationStatus)
 
 		protected := events.Group("/")
 		protected.Use(middleware.RequireAuth(middleware.MembershipStateNonMember, cfg.ClientAPIURL))

@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -28,53 +28,84 @@ func RequireAuth(minimumState int, clientAPIURL string) gin.HandlerFunc {
 			return
 		}
 
-		req, _ := http.NewRequest("POST", clientAPIURL+"/api/Auth/verify", nil)
-		req.Header.Set("Authorization", authHeader)
-
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil || resp.StatusCode != http.StatusOK {
-			// if not success, the token was invalid or the API is down
+		userID, role, accessLevel, err := verifyAuthHeader(authHeader, clientAPIURL)
+		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token verification failed"})
 			return
 		}
-		defer func() {
-			_ = resp.Body.Close()
-		}()
 
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to read token verification response"})
-			return
-		}
-
-		log.Printf("API Response: %s\n", string(bodyBytes))
-
-		// parse Clark's response (decoded JWT payload)
-		var user map[string]interface{}
-		if err := json.Unmarshal(bodyBytes, &user); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse token verification response"})
-			return
-		}
-
-		// read accessLevel (float64 due to JSON unmarshaling)
-		accessLevel, ok := user["accessLevel"].(float64)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Invalid user data from Clark API"})
-			return
-		}
-
-		if int(accessLevel) < minimumState {
+		if accessLevel < minimumState {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Insufficient privileges"})
 			return
 		}
 
-		role := "User"
-		if int(accessLevel) >= MembershipStateOfficer {
-			role = "Admin"
+		c.Set("userID", userID)
+		c.Set("userRole", role)
+		c.Next()
+	}
+}
+
+func verifyAuthHeader(authHeader string, clientAPIURL string) (string, string, int, error) {
+	req, err := http.NewRequest("POST", clientAPIURL+"/api/Auth/verify", nil)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("failed to create token verification request")
+	}
+	req.Header.Set("Authorization", authHeader)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return "", "", 0, fmt.Errorf("token verification failed")
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("failed to read token verification response")
+	}
+
+	// parse Clark's response (decoded JWT payload)
+	var user map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &user); err != nil {
+		return "", "", 0, fmt.Errorf("failed to parse token verification response")
+	}
+
+	// read accessLevel (float64 due to JSON unmarshaling)
+	accessLevelFloat, ok := user["accessLevel"].(float64)
+	if !ok {
+		return "", "", 0, fmt.Errorf("invalid user data from Clark API")
+	}
+
+	accessLevel := int(accessLevelFloat)
+
+	role := "User"
+	if accessLevel >= MembershipStateOfficer {
+		role = "Admin"
+	}
+
+	userID, _ := user["_id"].(string)
+
+	return userID, role, accessLevel, nil
+}
+
+// OptionalAuth enriches the request with user context when a valid token is present,
+// but still allows anonymous access for public endpoints
+func OptionalAuth(clientAPIURL string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.Next()
+			return
 		}
 
-		userID, _ := user["_id"].(string)
+		userID, role, _, err := verifyAuthHeader(authHeader, clientAPIURL)
+		if err != nil {
+			// if not success, the token was invalid or the API is down
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token verification failed"})
+			return
+		}
 
 		c.Set("userID", userID)
 		c.Set("userRole", role)

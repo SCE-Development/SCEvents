@@ -7,22 +7,28 @@ import (
 )
 
 type MockMongoStore struct {
-	Registration    *models.RegistrationRequest
-	RegistrationErr error
-	Event           *models.Event
-	EventErr        error
-	AttendeeCount   int64
-	AttendeeCountErr error
-	CountCalled     bool
-	HasAccepted     bool
-	HasAcceptedErr  error
-	MarkAcceptedErr error
-	MarkRejectedErr error
-	RejectedReason  models.DecisionReason
+	Registration               *models.RegistrationRequest
+	RegistrationErr            error
+	Event                      *models.Event
+	EventErr                   error
+	AttendeeCount              int64
+	AttendeeCountErr           error
+	CountCalled                bool
+	HasAccepted                bool
+	HasAcceptedErr             error
+	MarkAcceptedErr            error
+	MarkRejectedErr            error
+	RejectedReason             models.DecisionReason
+	RegistrationStatuses       map[string]models.Status
+	RegistrationStatusesErr    error
+	WaitlistedEventIDs         map[string]bool
+	WaitlistedEventIDsErr      error
+	Events                     []models.Event
+	EventsErr                  error
 }
 
 func (m *MockMongoStore) GetEvents(_ context.Context, _, _ string) ([]models.Event, error) {
-	return nil, nil
+	return m.Events, m.EventsErr
 }
 func (m *MockMongoStore) GetEventByID(_ context.Context, _ string) (*models.Event, error) {
 	return m.Event, m.EventErr
@@ -58,4 +64,11 @@ func (m *MockMongoStore) MarkRegistrationAccepted(_ context.Context, _ string) e
 func (m *MockMongoStore) MarkRegistrationRejected(_ context.Context, _ string, reason models.DecisionReason) error {
 	m.RejectedReason = reason
 	return m.MarkRejectedErr
+}
+func (m *MockMongoStore) GetRegistrationStatusesForUser(_ context.Context, _ string, _ []string) (map[string]models.Status, error) {
+	return m.RegistrationStatuses, m.RegistrationStatusesErr
+}
+
+func (m *MockMongoStore) GetWaitlistedEventIDsForUser(_ context.Context, _ string, _ []string) (map[string]bool, error) {
+	return m.WaitlistedEventIDs, m.WaitlistedEventIDsErr
 }

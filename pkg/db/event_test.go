@@ -14,7 +14,7 @@ func TestCreateEvent(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("success", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil)
+		store := NewMongoStore(mt.Coll, nil, nil)
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 		event := models.Event{
 			ID:           "event-1",
@@ -34,7 +34,7 @@ func TestCreateEvent(t *testing.T) {
 	})
 
 	mt.Run("generates ID when empty", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil)
+		store := NewMongoStore(mt.Coll, nil, nil)
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 		event := models.Event{
 			Name:     "Test Event",
@@ -52,7 +52,7 @@ func TestCreateEvent(t *testing.T) {
 	})
 
 	mt.Run("duplicate key error", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil)
+		store := NewMongoStore(mt.Coll, nil, nil)
 		mt.AddMockResponses(mtest.CreateWriteErrorsResponse(mtest.WriteError{
 			Index:   0,
 			Code:    11000,
@@ -75,7 +75,7 @@ func TestGetEventByID(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("found", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil)
+		store := NewMongoStore(mt.Coll, nil, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{
 			{Key: "_id", Value: "event-1"},
@@ -98,7 +98,7 @@ func TestGetEventByID(t *testing.T) {
 	})
 
 	mt.Run("not found", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil)
+		store := NewMongoStore(mt.Coll, nil, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch))
 		_, err := store.GetEventByID(context.Background(), "nonexistent")
@@ -112,7 +112,7 @@ func TestDeleteEventByID(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("success", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil)
+		store := NewMongoStore(mt.Coll, nil, nil)
 		mt.AddMockResponses(bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: int32(1)}})
 		if err := store.DeleteEventByID(context.Background(), "event-1"); err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -120,7 +120,7 @@ func TestDeleteEventByID(t *testing.T) {
 	})
 
 	mt.Run("not found", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil)
+		store := NewMongoStore(mt.Coll, nil, nil)
 		mt.AddMockResponses(bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: int32(0)}})
 		err := store.DeleteEventByID(context.Background(), "nonexistent")
 		if err != mongo.ErrNoDocuments {
@@ -133,7 +133,7 @@ func TestUpdateEventByID(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("success", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil)
+		store := NewMongoStore(mt.Coll, nil, nil)
 		mt.AddMockResponses(bson.D{
 			{Key: "ok", Value: 1},
 			{Key: "n", Value: int32(1)},
@@ -148,7 +148,7 @@ func TestUpdateEventByID(t *testing.T) {
 	})
 
 	mt.Run("not found", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil)
+		store := NewMongoStore(mt.Coll, nil, nil)
 		mt.AddMockResponses(bson.D{
 			{Key: "ok", Value: 1},
 			{Key: "n", Value: int32(0)},
@@ -167,7 +167,7 @@ func TestGetEvents(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	mt.Run("returns matching events", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil)
+		store := NewMongoStore(mt.Coll, nil, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch,
 			bson.D{
@@ -198,7 +198,7 @@ func TestGetEvents(t *testing.T) {
 	})
 
 	mt.Run("empty result", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil)
+		store := NewMongoStore(mt.Coll, nil, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch))
 		events, err := store.GetEvents(context.Background(), "2026-05-01", "2026-05-31")
