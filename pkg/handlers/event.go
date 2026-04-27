@@ -798,15 +798,15 @@ func buildEventResponses(
 	return responses
 }
 
-func (h *EventHandler) loadEventAndAuthorizeAdmin(ctx context.Context, eventID, userID string) (*models.Event, bool) {
+func (h *EventHandler) loadEventAndAuthorizeAdmin(ctx context.Context, eventID, userID string) bool {
 	ev, err := h.stores.Mongo.GetEventByID(ctx, eventID)
 	if err != nil {
-		return nil, false
+		return false
 	}
 	if !ev.IsAdmin(userID) {
-		return nil, false
+		return false
 	}
-	return ev, true
+	return true
 }
 
 func parsePagination(c *gin.Context) (int64, int64, bool) {
@@ -852,7 +852,7 @@ func (h *EventHandler) ListEventRegistrations(c *gin.Context) {
 		return
 	}
 
-	if _, allowed := h.loadEventAndAuthorizeAdmin(c.Request.Context(), eventID, userID); !allowed {
+	if !h.loadEventAndAuthorizeAdmin(c.Request.Context(), eventID, userID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you are not an admin of this event"})
 		return
 	}
@@ -900,7 +900,7 @@ func (h *EventHandler) GetEventRegistrationByRequestID(c *gin.Context) {
 		return
 	}
 
-	if _, allowed := h.loadEventAndAuthorizeAdmin(c.Request.Context(), eventID, userID); !allowed {
+	if !h.loadEventAndAuthorizeAdmin(c.Request.Context(), eventID, userID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you are not an admin of this event"})
 		return
 	}
