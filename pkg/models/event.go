@@ -391,8 +391,31 @@ func (e *Event) ApplyPatch(fields map[string]interface{}) error {
 			e.RegistrationForm = questions
 
 		case "admins":
-			// supported by persistence model, but not yet patchable here
-			return fmt.Errorf("%s cannot be updated through this endpoint yet", key)
+			arr, ok := value.([]interface{})
+			if !ok {
+				return fmt.Errorf("admins must be an array")
+			}
+			seen := make(map[string]struct{}, len(arr))
+			admins := make([]string, 0, len(arr))
+			for i, item := range arr {
+				admin, ok := item.(string)
+				if !ok {
+					return fmt.Errorf("admins[%d] must be a string", i)
+				}
+				admin = strings.TrimSpace(admin)
+				if admin == "" {
+					return fmt.Errorf("admins[%d] cannot be empty", i)
+				}
+				if _, exists := seen[admin]; exists {
+					continue
+				}
+				seen[admin] = struct{}{}
+				admins = append(admins, admin)
+			}
+			if len(admins) == 0 {
+				return fmt.Errorf("admins must include at least one user")
+			}
+			e.Admins = admins
 		}
 	}
 

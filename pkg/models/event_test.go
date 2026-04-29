@@ -1,6 +1,7 @@
 package models
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -383,14 +384,77 @@ func TestApplyPatch(t *testing.T) {
 	if err := e.ApplyPatch(invalidFields); err == nil {
 		t.Errorf("expected error for invalid type")
 	}
-	
-	unpatchableFields := map[string]interface{}{
-		"admins": []string{"admin1"},
+}
+
+func TestApplyPatch_Admins(t *testing.T) {
+	e := &Event{
+		Admins: []string{"admin-old"},
 	}
-	if err := e.ApplyPatch(unpatchableFields); err == nil {
-		t.Errorf("expected error for unpatchable field admins")
+
+	fields := map[string]interface{}{
+		"admins": []interface{}{" admin-1 ", "admin-2", "admin-1"},
+	}
+
+	if err := e.ApplyPatch(fields); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
+	expected := []string{"admin-1", "admin-2"}
+	if !reflect.DeepEqual(e.Admins, expected) {
+		t.Errorf("expected admins %v, got %v", expected, e.Admins)
 	}
 }
+
+func TestApplyPatch_AdminsRejectsInvalidValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		fields  map[string]interface{}
+		wantErr string
+	}{
+		{
+			name: "not an array",
+			fields: map[string]interface{}{
+				"admins": "admin-1",
+			},
+			wantErr: "admins must be an array",
+		},
+		{
+			name: "empty array",
+			fields: map[string]interface{}{
+				"admins": []interface{}{},
+			},
+			wantErr: "admins must include at least one user",
+		},
+		{
+			name: "blank admin",
+			fields: map[string]interface{}{
+				"admins": []interface{}{"admin-1", " "},
+			},
+			wantErr: "admins[1] cannot be empty",
+		},
+		{
+			name: "non-string admin",
+			fields: map[string]interface{}{
+				"admins": []interface{}{"admin-1", float64(2)},
+			},
+			wantErr: "admins[1] must be a string",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &Event{Admins: []string{"admin-old"}}
+			err := e.ApplyPatch(tt.fields)
+			if err == nil {
+				t.Fatalf("expected error %q, got nil", tt.wantErr)
+			}
+			if err.Error() != tt.wantErr {
+				t.Fatalf("expected error %q, got %q", tt.wantErr, err.Error())
+			}
+		})
+	}
+}
+
 
 func TestApplyPatch_RegistrationForm(t *testing.T) {
 	e := &Event{

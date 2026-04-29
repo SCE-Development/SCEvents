@@ -107,7 +107,6 @@ func main() {
 		protected := events.Group("/")
 		protected.Use(middleware.RequireAuth(middleware.MembershipStateNonMember, cfg.ClientAPIURL))
 		{
-			protected.POST("/", eventHandler.CreateEvent)
 			protected.GET("/:id/attendance", eventHandler.GetEventAttendanceSummary)
 			protected.GET("/:id/registrations", eventHandler.ListEventRegistrations)
 			protected.GET("/:id/registrations/:request_id", eventHandler.GetEventRegistrationByRequestID)
@@ -115,6 +114,12 @@ func main() {
 			protected.POST("/:id/waitlist", eventHandler.JoinEventWaitlist)
 			protected.DELETE("/:id", eventHandler.DeleteEventByID)
 			protected.PATCH("/:id", eventHandler.UpdateEventByID)
+		}
+
+		adminProtected := events.Group("/")
+		adminProtected.Use(middleware.RequireAuth(middleware.MembershipStateOfficer, cfg.ClientAPIURL))
+		{
+			adminProtected.POST("/", eventHandler.CreateEvent)
 		}
 	}
 
