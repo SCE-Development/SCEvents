@@ -55,3 +55,11 @@ type KafkaRegistrationMessage struct {
 	UserID    string    `json:"user_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+// RegistrationDashboardSummary aggregates registration counts for admin dashboards.
+type RegistrationDashboardSummary struct {
+	Total    int64 `json:"total"`
+	Accepted int64 `json:"accepted"`
+	Pending  int64 `json:"pending"`
+	Rejected int64 `json:"rejected"`
+}

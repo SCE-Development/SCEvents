@@ -236,6 +236,78 @@ func (s *mongoStore) GetRegistrationByID(ctx context.Context, requestID string) 
 	return &r, nil
 }
 
+func (s *mongoStore) ListRegistrationsByEventID(ctx context.Context, eventID string, limit, offset int64) ([]models.RegistrationRequest, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}}).
+		SetLimit(limit).
+		SetSkip(offset)
+
+	cursor, err := s.registrations.Find(ctx, bson.M{"event_id": eventID}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = cursor.Close(ctx)
+	}()
+
+	registrations := make([]models.RegistrationRequest, 0)
+	if err := cursor.All(ctx, &registrations); err != nil {
+		return nil, err
+	}
+	return registrations, nil
+}
+
+func (s *mongoStore) GetRegistrationByEventAndRequestID(ctx context.Context, eventID, requestID string) (*models.RegistrationRequest, error) {
+	filter := bson.M{
+		"_id":      requestID,
+		"event_id": eventID,
+	}
+
+	var r models.RegistrationRequest
+	err := s.registrations.FindOne(ctx, filter).Decode(&r)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (s *mongoStore) CountRegistrationsByStatusForEvent(ctx context.Context, eventID string) (map[models.Status]int64, error) {
+	statuses := []models.Status{
+		models.StatusPending,
+		models.StatusAccepted,
+		models.StatusRejected,
+	}
+
+	counts := map[models.Status]int64{
+		models.StatusPending:  0,
+		models.StatusAccepted: 0,
+		models.StatusRejected: 0,
+	}
+
+	for _, status := range statuses {
+		count, err := s.registrations.CountDocuments(ctx, bson.M{
+			"event_id": eventID,
+			"status":   status,
+		})
+		if err != nil {
+			return nil, err
+		}
+		counts[status] = count
+	}
+
+	return counts, nil
+}
+
 func (s *mongoStore) CountAcceptedRegistrationsForEvent(ctx context.Context, eventID string) (int64, error) {
 	return s.registrations.CountDocuments(ctx, bson.M{
 		"event_id": eventID,
