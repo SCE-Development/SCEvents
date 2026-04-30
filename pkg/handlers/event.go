@@ -242,7 +242,8 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		return
 	}
 
-	event.Admins = ensureAdminIncluded(event.Admins, creatorID)
+	event.Admins = sanitizeAdmins(event.Admins)
+	event.Admins = ensureCreatorIsEventAdmin(event.Admins, creatorID)
 
 	if err := event.Validate(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -274,9 +275,9 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 	c.JSON(http.StatusCreated, createdEvent)
 }
 
-func ensureAdminIncluded(admins []string, userID string) []string {
-	seen := make(map[string]struct{}, len(admins)+1)
-	normalized := make([]string, 0, len(admins)+1)
+func sanitizeAdmins(admins []string) []string {
+	seen := make(map[string]struct{}, len(admins))
+	normalized := make([]string, 0, len(admins))
 
 	for _, admin := range admins {
 		admin = strings.TrimSpace(admin)
@@ -290,11 +291,16 @@ func ensureAdminIncluded(admins []string, userID string) []string {
 		normalized = append(normalized, admin)
 	}
 
-	if _, ok := seen[userID]; !ok {
-		normalized = append(normalized, userID)
-	}
-
 	return normalized
+}
+
+func ensureCreatorIsEventAdmin(admins []string, creatorID string) []string {
+	for _, admin := range admins {
+		if admin == creatorID {
+			return admins
+		}
+	}
+	return append(admins, creatorID)
 }
 
 // deletes an event by ID
@@ -435,7 +441,7 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 	}
 
 	if _, ok := fields["admins"]; ok {
-		fields["admins"] = updatedEvent.Admins
+		fields["admins"] = sanitizeAdmins(updatedEvent.Admins)
 	}
 
 	err = db.UpdateEventByID(id, fields)

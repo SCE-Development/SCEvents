@@ -112,14 +112,14 @@ func main() {
 			protected.GET("/:id/registrations/:request_id", eventHandler.GetEventRegistrationByRequestID)
 			protected.POST("/:id/register", eventHandler.RegisterForEvent(producer))
 			protected.POST("/:id/waitlist", eventHandler.JoinEventWaitlist)
-			protected.DELETE("/:id", eventHandler.DeleteEventByID)
-			protected.PATCH("/:id", eventHandler.UpdateEventByID)
 		}
 
-		adminProtected := events.Group("/")
-		adminProtected.Use(middleware.RequireAuth(middleware.MembershipStateOfficer, cfg.ClientAPIURL))
+		officerProtected := events.Group("/")
+		officerProtected.Use(middleware.RequireAuth(middleware.MembershipStateOfficer, cfg.ClientAPIURL))
 		{
-			adminProtected.POST("/", eventHandler.CreateEvent)
+			officerProtected.POST("/", eventHandler.CreateEvent)
+			officerProtected.DELETE("/:id", eventHandler.DeleteEventByID)
+			officerProtected.PATCH("/:id", eventHandler.UpdateEventByID)
 		}
 	}
 
