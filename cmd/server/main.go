@@ -94,11 +94,7 @@ func main() {
 	r := gin.Default()
 
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{
-		cfg.ClientURL,
-		"http://localhost:3000",
-		"http://localhost:3001",
-	}
+	config.AllowOrigins = []string{cfg.ClientURL}
 	config.AllowCredentials = true
 	config.AddAllowHeaders("Authorization")
 	r.Use(cors.New(config))
