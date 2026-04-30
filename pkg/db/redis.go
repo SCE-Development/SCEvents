@@ -65,6 +65,8 @@ func EventRegistrantsKey(eventID string) string {
 	return fmt.Sprintf("event:%s:registrants", eventID)
 }
 
+// SetEventHeadcount stores capacity for capacity-limited events only
+// Unlimited events (max_attendees == -1) should never call this
 func (s *redisStore) SetEventHeadcount(ctx context.Context, eventID string, capacity int) error {
 	if s.client == nil {
 		return fmt.Errorf("redis not connected")
@@ -88,6 +90,13 @@ func (s *redisStore) DeleteEventHeadcount(ctx context.Context, eventID string) e
 	key := EventHeadcountKey(eventID)
 	return s.client.Del(ctx, key).Err()
 }
+
+// NOTE:
+// Redis headcount is ONLY used for capacity-limited events
+// Events with max_attendees == -1 (unlimited) are NOT stored in Redis at all
+// Therefore, these Lua scripts should never encounter negative values in normal flows
+// The "current < 0" checks below are defensive fallbacks and are not part of the
+// intended control flow for unlimited events
 
 var takeSeatScript = redis.NewScript(`
 local current = redis.call("GET", KEYS[1])

@@ -38,22 +38,18 @@ func InitWaitlistIndexes() error {
 	return err
 }
 
-func CreateWaitlistEntry(entry models.WaitlistEntry) error {
-	coll := GetWaitlistCollection()
-
+func (s *mongoStore) CreateWaitlistEntry(ctx context.Context, entry models.WaitlistEntry) error {
 	entry.CreatedAt = time.Now().UTC()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	_, err := coll.InsertOne(ctx, entry)
+	_, err := s.waitlists.InsertOne(ctx, entry)
 	return err
 }
 
-func HasWaitlistEntry(eventID string, userID string) (bool, error) {
-	coll := GetWaitlistCollection()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func (s *mongoStore) HasWaitlistEntry(ctx context.Context, eventID string, userID string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	filter := bson.M{
@@ -61,7 +57,7 @@ func HasWaitlistEntry(eventID string, userID string) (bool, error) {
 		"user_id":  userID,
 	}
 
-	err := coll.FindOne(ctx, filter).Err()
+	err := s.waitlists.FindOne(ctx, filter).Err()
 	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}
@@ -72,17 +68,15 @@ func HasWaitlistEntry(eventID string, userID string) (bool, error) {
 	return true, nil
 }
 
-func CountWaitlistEntries(eventID string) (int64, error) {
-	coll := GetWaitlistCollection()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func (s *mongoStore) CountWaitlistEntries(ctx context.Context, eventID string) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	filter := bson.M{
 		"event_id": eventID,
 	}
 
-	return coll.CountDocuments(ctx, filter)
+	return s.waitlists.CountDocuments(ctx, filter)
 }
 
 // GetWaitlistedEventIDsForUser returns a set of event IDs the user is currently waitlisted for
@@ -92,6 +86,9 @@ func (s *mongoStore) GetWaitlistedEventIDsForUser(ctx context.Context, userID st
 	if strings.TrimSpace(userID) == "" || len(eventIDs) == 0 {
 		return result, nil
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
 	filter := bson.M{
 		"user_id": userID,

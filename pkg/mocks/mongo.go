@@ -2,6 +2,7 @@ package mocks
 
 import (
 	"context"
+	"time"
 
 	"github.com/SCE-Development/SCEvents/pkg/models"
 )
@@ -30,8 +31,16 @@ type MockMongoStore struct {
 	Events                     []models.Event
 	EventsErr                  error
 	CreatedEvent               *models.Event
+	PublishedDueCount          int64
+    PublishDueEventsErr        error
 }
 
+func (m *MockMongoStore) GetVisibleEvents(_ context.Context, _ models.EventViewer, _, _ string) ([]models.Event, error) {
+	return m.Events, m.EventsErr
+}
+func (m *MockMongoStore) GetVisibleEventByID(_ context.Context, _ models.EventViewer, _ string) (*models.Event, error) {
+	return m.Event, m.EventErr
+}
 func (m *MockMongoStore) GetEvents(_ context.Context, _, _ string) ([]models.Event, error) {
 	return m.Events, m.EventsErr
 }
@@ -90,7 +99,18 @@ func (m *MockMongoStore) MarkRegistrationRejected(_ context.Context, _ string, r
 func (m *MockMongoStore) GetRegistrationStatusesForUser(_ context.Context, _ string, _ []string) (map[string]models.Status, error) {
 	return m.RegistrationStatuses, m.RegistrationStatusesErr
 }
-
+func (m *MockMongoStore) HasWaitlistEntry(_ context.Context, _, _ string) (bool, error) {
+	return false, nil
+}
+func (m *MockMongoStore) CountWaitlistEntries(_ context.Context, _ string) (int64, error) {
+	return 0, nil
+}
+func (m *MockMongoStore) CreateWaitlistEntry(_ context.Context, _ models.WaitlistEntry) error {
+	return nil
+}
 func (m *MockMongoStore) GetWaitlistedEventIDsForUser(_ context.Context, _ string, _ []string) (map[string]bool, error) {
 	return m.WaitlistedEventIDs, m.WaitlistedEventIDsErr
+}
+func (m *MockMongoStore) PublishDueEvents(_ context.Context, _ time.Time) (int64, error) {
+	return m.PublishedDueCount, m.PublishDueEventsErr
 }

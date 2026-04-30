@@ -47,12 +47,12 @@ func TestValidate(t *testing.T) {
 		{
 			name: "valid public event",
 			event: Event{
-				Name:       "Test",
-				Date:       "2026-05-01",
-				Time:       "10:00",
-				Location:   "Room 101",
-				Status:     StatusPublished,
-				Visibility: VisibilityPublic,
+				Name:         "Test",
+				Date:         "2026-05-01",
+				Time:         "10:00",
+				Location:     "Room 101",
+				Status:       StatusPublished,
+				Visibility:   VisibilityPublic,
 				MaxAttendees: 50,
 			},
 			wantErr: false,
@@ -60,11 +60,11 @@ func TestValidate(t *testing.T) {
 		{
 			name: "missing name",
 			event: Event{
-				Date:       "2026-05-01",
-				Time:       "10:00",
-				Location:   "Room 101",
-				Status:     StatusPublished,
-				Visibility: VisibilityPublic,
+				Date:         "2026-05-01",
+				Time:         "10:00",
+				Location:     "Room 101",
+				Status:       StatusPublished,
+				Visibility:   VisibilityPublic,
 				MaxAttendees: 50,
 			},
 			wantErr: true,
@@ -80,19 +80,19 @@ func TestValidate(t *testing.T) {
 				Visibility:      VisibilityPublic,
 				WaitlistEnabled: true,
 				WaitlistSize:    0,
-				MaxAttendees: 50,
+				MaxAttendees:    50,
 			},
 			wantErr: true,
 		},
 		{
 			name: "private event without minimum role",
 			event: Event{
-				Name:       "Test",
-				Date:       "2026-05-01",
-				Time:       "10:00",
-				Location:   "Room 101",
-				Status:     StatusPublished,
-				Visibility: VisibilityPrivate,
+				Name:         "Test",
+				Date:         "2026-05-01",
+				Time:         "10:00",
+				Location:     "Room 101",
+				Status:       StatusPublished,
+				Visibility:   VisibilityPrivate,
 				MaxAttendees: 50,
 			},
 			wantErr: true,
@@ -175,7 +175,7 @@ func TestEvent_Validate_MaxAttendees(t *testing.T) {
 	}
 }
 
-func TestIsAdmin(t *testing.T) {
+func TestIsListedAdmin(t *testing.T) {
 	tests := []struct {
 		name   string
 		admins []string
@@ -205,8 +205,8 @@ func TestIsAdmin(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ev := Event{Admins: tc.admins}
-			if got := ev.IsAdmin(tc.userID); got != tc.want {
-				t.Errorf("IsAdmin(%q) = %v, want %v", tc.userID, got, tc.want)
+			if got := ev.IsListedAdmin(tc.userID); got != tc.want {
+				t.Errorf("IsListedAdmin(%q) = %v, want %v", tc.userID, got, tc.want)
 			}
 		})
 	}
@@ -454,7 +454,6 @@ func TestApplyPatch_AdminsRejectsInvalidValues(t *testing.T) {
 		})
 	}
 }
-
 
 func TestApplyPatch_RegistrationForm(t *testing.T) {
 	e := &Event{

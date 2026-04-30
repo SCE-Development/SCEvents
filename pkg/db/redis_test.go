@@ -97,7 +97,7 @@ func TestTryTakeEventSeatFullEvent(t *testing.T) {
 	}
 }
 
-func TestTryTakeEventSeatUnlimitedEvent(t *testing.T) {
+func TestTryTakeEventSeatNegativeHeadcountFallback(t *testing.T) {
 	store := newTestRedisStore(t)
 
 	if err := store.SetEventHeadcount(context.Background(), "event-1", -1); err != nil {

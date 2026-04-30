@@ -107,11 +107,11 @@ func TestGetEventAttendanceSummary(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d", w.Code)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("expected status 403, got %d", w.Code)
 		}
-		if !mongoStore.CountCalled {
-			t.Fatal("expected attendee count query to be called")
+		if mongoStore.CountCalled {
+			t.Fatal("expected attendee count query not to be called")
 		}
 	})
 }
@@ -235,7 +235,6 @@ func TestCreateEventRejectsMissingCreatorID(t *testing.T) {
 		t.Fatal("did not expect event to be created")
 	}
 }
-
 
 func newTestHandler(redis db.RedisStore) *EventHandler {
 	return &EventHandler{
@@ -514,8 +513,8 @@ func TestGetEvents_Returns500_WhenRegistrationLookupFails(t *testing.T) {
 
 func TestGetEvents_Returns500_WhenWaitlistLookupFails(t *testing.T) {
 	mongoStore := &mocks.MockMongoStore{
-		Events:              []models.Event{{ID: "event-1", Name: "Hack Night"}},
-		RegistrationStatuses: map[string]models.Status{},
+		Events:                []models.Event{{ID: "event-1", Name: "Hack Night"}},
+		RegistrationStatuses:  map[string]models.Status{},
 		WaitlistedEventIDsErr: errors.New("boom"),
 	}
 	router := newEventReadTestRouter(mongoStore, "user-1")
