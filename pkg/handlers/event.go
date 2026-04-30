@@ -515,7 +515,6 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 	})
 }
 
-// RegisterForEvent
 func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		eventID := c.Param("id")

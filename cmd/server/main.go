@@ -191,24 +191,3 @@ func gracefulShutdown(cancel context.CancelFunc, wg *sync.WaitGroup, errChan <-c
 	wg.Wait()
 	log.Println("shutdown complete.")
 }
-
-func runPublishScheduler(ctx context.Context, stores *db.Stores) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			updated, err := stores.Mongo.PublishDueEvents(ctx, time.Now().UTC())
-			if err != nil {
-				log.Printf("publish scheduler error: %v", err)
-				continue
-			}
-			if updated > 0 {
-				log.Printf("auto-published %d event(s)", updated)
-			}
-		}
-	}
-}
