@@ -35,21 +35,24 @@ func buildDateRangeFilter(startDate, endDate string) bson.M {
 	}
 }
 
-// buildVisibilityFilter constructs a MongoDB filter to determine which events are visible to a given viewer based on their access level and the event's visibility settings
+// buildVisibilityFilter returns the Mongo filter for events the viewer is allowed to read.
+// Site admins can read all events.
+// Listed event admins can read their own events, including drafts.
+// Everyone else can only read published events allowed by visibility/minimum_visible_role.
 func buildVisibilityFilter(viewer models.EventViewer) bson.M {
-	// Site admin can view everything
+	// Site admins can view every event.
 	if viewer.AccessLevel >= 3 {
 		return bson.M{}
 	}
 
 	conditions := bson.A{}
 
-	// Event admins can view their own events, even if draft
+	// Event admins can view their own events, including drafts.
 	if strings.TrimSpace(viewer.UserID) != "" {
 		conditions = append(conditions, bson.M{"admins": viewer.UserID})
 	}
 
-	// Published public events are visible to everyone
+	// Published public events are visible to everyone.
 	conditions = append(conditions, bson.M{
 		"$and": bson.A{
 			bson.M{"status": models.StatusPublished},
@@ -57,16 +60,13 @@ func buildVisibilityFilter(viewer models.EventViewer) bson.M {
 		},
 	})
 
-	// Published private events depend on access level
+	// Published private events require the viewer to meet minimum_visible_role.
 	privateRoleConditions := bson.A{}
 	if viewer.AccessLevel >= 1 {
 		privateRoleConditions = append(privateRoleConditions, bson.M{"minimum_visible_role": models.RoleMember})
 	}
 	if viewer.AccessLevel >= 2 {
 		privateRoleConditions = append(privateRoleConditions, bson.M{"minimum_visible_role": models.RoleOfficer})
-	}
-	if viewer.AccessLevel >= 3 {
-		privateRoleConditions = append(privateRoleConditions, bson.M{"minimum_visible_role": models.RoleAdmin})
 	}
 
 	if len(privateRoleConditions) > 0 {

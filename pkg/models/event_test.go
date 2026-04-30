@@ -3,6 +3,7 @@ package models
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestApplyDefaults(t *testing.T) {
@@ -258,10 +259,11 @@ func TestValidateRegistration(t *testing.T) {
 
 func TestSanitizeUpdateFields(t *testing.T) {
 	fields := map[string]interface{}{
-		"id":         "123",
-		"_id":        "123",
-		"created_at": "now",
-		"name":       "new name",
+		"id":           "123",
+		"_id":          "123",
+		"created_at":   "now",
+		"published_at": "later",
+		"name":         "new name",
 	}
 
 	SanitizeUpdateFields(fields)
@@ -277,6 +279,9 @@ func TestSanitizeUpdateFields(t *testing.T) {
 	}
 	if _, ok := fields["name"]; !ok {
 		t.Errorf("expected name to be kept")
+	}
+	if _, ok := fields["published_at"]; ok {
+		t.Errorf("expected published_at to be removed")
 	}
 }
 
@@ -509,4 +514,280 @@ func TestApplyPatch_RegistrationForm(t *testing.T) {
 	if err := e.ApplyPatch(invalidFields); err == nil {
 		t.Errorf("expected error for invalid registration_form type")
 	}
+}
+
+func TestCanView(t *testing.T) {
+	base := Event{
+		ID:                 "event-1",
+		Name:               "Test Event",
+		Status:             StatusPublished,
+		Visibility:         VisibilityPublic,
+		MinimumVisibleRole: "",
+	}
+
+	tests := []struct {
+		name   string
+		event  Event
+		viewer EventViewer
+		want   bool
+	}{
+		{
+			name:   "site admin can view anything",
+			event:  Event{Status: StatusDraft},
+			viewer: EventViewer{UserID: "admin-1", AccessLevel: 3},
+			want:   true,
+		},
+		{
+			name: "listed event admin can view own draft",
+			event: Event{
+				Status: StatusDraft,
+				Admins: []string{"user-1"},
+			},
+			viewer: EventViewer{UserID: "user-1", AccessLevel: 1},
+			want:   true,
+		},
+		{
+			name:   "non-admin cannot view draft",
+			event:  Event{Status: StatusDraft},
+			viewer: EventViewer{UserID: "user-2", AccessLevel: 1},
+			want:   false,
+		},
+		{
+			name:   "published public visible to anonymous",
+			event:  base,
+			viewer: EventViewer{},
+			want:   true,
+		},
+		{
+			name: "published private member visible to member",
+			event: Event{
+				Status:             StatusPublished,
+				Visibility:         VisibilityPrivate,
+				MinimumVisibleRole: RoleMember,
+			},
+			viewer: EventViewer{AccessLevel: 1},
+			want:   true,
+		},
+		{
+			name: "published private officer not visible to member",
+			event: Event{
+				Status:             StatusPublished,
+				Visibility:         VisibilityPrivate,
+				MinimumVisibleRole: RoleOfficer,
+			},
+			viewer: EventViewer{AccessLevel: 1},
+			want:   false,
+		},
+		{
+			name: "published private officer visible to officer",
+			event: Event{
+				Status:             StatusPublished,
+				Visibility:         VisibilityPrivate,
+				MinimumVisibleRole: RoleOfficer,
+			},
+			viewer: EventViewer{AccessLevel: 2},
+			want:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.event.CanView(tc.viewer); got != tc.want {
+				t.Fatalf("CanView() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestShouldAutoPublish(t *testing.T) {
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	past := now.Add(-time.Hour)
+	future := now.Add(time.Hour)
+
+	tests := []struct {
+		name  string
+		event Event
+		want  bool
+	}{
+		{
+			name:  "nil publish date does not auto publish",
+			event: Event{Status: StatusDraft},
+			want:  false,
+		},
+		{
+			name: "future publish date does not auto publish",
+			event: Event{
+				Status:      StatusDraft,
+				PublishDate: &future,
+			},
+			want: false,
+		},
+		{
+			name: "past publish date auto publishes",
+			event: Event{
+				Status:      StatusDraft,
+				PublishDate: &past,
+			},
+			want: true,
+		},
+		{
+			name: "published event does not auto publish again",
+			event: Event{
+				Status:      StatusPublished,
+				PublishDate: &past,
+			},
+			want: false,
+		},
+		{
+			name: "closed event does not auto publish",
+			event: Event{
+				Status:      StatusClosed,
+				PublishDate: &past,
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.event.ShouldAutoPublish(now); got != tc.want {
+				t.Fatalf("ShouldAutoPublish() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSyncPublicationState(t *testing.T) {
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	past := now.Add(-time.Hour)
+
+	t.Run("manual publish sets timestamps when missing", func(t *testing.T) {
+		ev := Event{Status: StatusPublished}
+
+		ev.SyncPublicationState(now)
+
+		if ev.PublishDate == nil {
+			t.Fatal("expected PublishDate to be set")
+		}
+		if ev.PublishedAt == nil {
+			t.Fatal("expected PublishedAt to be set")
+		}
+	})
+
+	t.Run("due draft auto publishes", func(t *testing.T) {
+		ev := Event{
+			Status:      StatusDraft,
+			PublishDate: &past,
+		}
+
+		ev.SyncPublicationState(now)
+
+		if ev.Status != StatusPublished {
+			t.Fatalf("expected status published, got %s", ev.Status)
+		}
+		if ev.PublishedAt == nil {
+			t.Fatal("expected PublishedAt to be set")
+		}
+	})
+
+	t.Run("future draft stays draft", func(t *testing.T) {
+		future := now.Add(time.Hour)
+		ev := Event{
+			Status:      StatusDraft,
+			PublishDate: &future,
+		}
+
+		ev.SyncPublicationState(now)
+
+		if ev.Status != StatusDraft {
+			t.Fatalf("expected status draft, got %s", ev.Status)
+		}
+		if ev.PublishedAt != nil {
+			t.Fatal("expected PublishedAt to remain nil")
+		}
+	})
+}
+
+func TestValidate_PublishDateRules(t *testing.T) {
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+
+	t.Run("closed event cannot have publish date", func(t *testing.T) {
+		ev := Event{
+			Name:         "Test",
+			Date:         "2026-05-01",
+			Time:         "10:00",
+			Location:     "Room 101",
+			Status:       StatusClosed,
+			Visibility:   VisibilityPublic,
+			MaxAttendees: 10,
+			PublishDate:  &now,
+		}
+
+		err := ev.Validate()
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("draft event with publish date is valid", func(t *testing.T) {
+		ev := Event{
+			Name:         "Test",
+			Date:         "2026-05-01",
+			Time:         "10:00",
+			Location:     "Room 101",
+			Status:       StatusDraft,
+			Visibility:   VisibilityPublic,
+			MaxAttendees: 10,
+			PublishDate:  &now,
+		}
+
+		if err := ev.Validate(); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+}
+
+func TestApplyPatch_PublishDate(t *testing.T) {
+	e := &Event{}
+
+	t.Run("sets publish_date from RFC3339 string", func(t *testing.T) {
+		fields := map[string]interface{}{
+			"publish_date": "2026-05-01T12:00:00Z",
+		}
+
+		if err := e.ApplyPatch(fields); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if e.PublishDate == nil {
+			t.Fatal("expected PublishDate to be set")
+		}
+	})
+
+	t.Run("clears publish_date with nil", func(t *testing.T) {
+		e.PublishDate = func() *time.Time {
+			tm := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+			return &tm
+		}()
+
+		fields := map[string]interface{}{
+			"publish_date": nil,
+		}
+
+		if err := e.ApplyPatch(fields); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if e.PublishDate != nil {
+			t.Fatal("expected PublishDate to be nil")
+		}
+	})
+
+	t.Run("rejects invalid publish_date type", func(t *testing.T) {
+		fields := map[string]interface{}{
+			"publish_date": 123,
+		}
+
+		if err := e.ApplyPatch(fields); err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
 }

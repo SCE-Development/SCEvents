@@ -81,9 +81,14 @@ func verifyAuthHeader(authHeader string, clientAPIURL string) (string, string, i
 
 	accessLevel := int(accessLevelFloat)
 
-	role := "User"
-	if accessLevel >= MembershipStateOfficer {
-		role = "Admin"
+	role := "non_member"
+	switch {
+	case accessLevel >= MembershipStateAdmin:
+		role = "admin"
+	case accessLevel >= MembershipStateOfficer:
+		role = "officer"
+	case accessLevel >= MembershipStateMember:
+		role = "member"
 	}
 
 	userID, _ := user["_id"].(string)

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	"github.com/SCE-Development/SCEvents/pkg/mocks"
@@ -24,6 +25,7 @@ func newAttendanceSummaryTestRouter(mongoStore db.MongoStore) *gin.Engine {
 	router.Use(func(c *gin.Context) {
 		c.Set("userID", "user-1")
 		c.Set("userRole", models.RoleMember)
+		c.Set("accessLevel", 1)
 		c.Next()
 	})
 	router.GET("/events/:id/attendance", handler.GetEventAttendanceSummary)
@@ -31,7 +33,7 @@ func newAttendanceSummaryTestRouter(mongoStore db.MongoStore) *gin.Engine {
 }
 
 func TestGetEventAttendanceSummary(t *testing.T) {
-	t.Run("returns attendee count", func(t *testing.T) {
+	t.Run("returns attendee count for listed event admin", func(t *testing.T) {
 		mongoStore := &mocks.MockMongoStore{
 			Event:         &models.Event{ID: "event-1", Admins: []string{"user-1"}},
 			AttendeeCount: 2,
@@ -55,6 +57,37 @@ func TestGetEventAttendanceSummary(t *testing.T) {
 		}
 		if body["attendee_count"] != float64(2) {
 			t.Fatalf("expected attendee_count 2, got %v", body["attendee_count"])
+		}
+		if !mongoStore.CountCalled {
+			t.Fatal("expected attendee count query to be called")
+		}
+	})
+
+	t.Run("returns attendee count for site admin on admin-less event", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+
+		mongoStore := &mocks.MockMongoStore{
+			Event:         &models.Event{ID: "event-1", Admins: []string{}},
+			AttendeeCount: 4,
+		}
+		handler := NewEventHandler(&db.Stores{Mongo: mongoStore})
+
+		router.Use(func(c *gin.Context) {
+			c.Set("userID", "site-admin-1")
+			c.Set("userRole", models.RoleAdmin)
+			c.Set("accessLevel", 3)
+			c.Next()
+		})
+
+		router.GET("/events/:id/attendance", handler.GetEventAttendanceSummary)
+
+		req := httptest.NewRequest(http.MethodGet, "/events/event-1/attendance", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
 		}
 		if !mongoStore.CountCalled {
 			t.Fatal("expected attendee count query to be called")
@@ -96,7 +129,7 @@ func TestGetEventAttendanceSummary(t *testing.T) {
 		}
 	})
 
-	t.Run("returns attendee count for non-admin", func(t *testing.T) {
+	t.Run("returns forbidden for non-admin", func(t *testing.T) {
 		mongoStore := &mocks.MockMongoStore{
 			Event:         &models.Event{ID: "event-1", Admins: []string{"user-2"}},
 			AttendeeCount: 1,
@@ -312,7 +345,7 @@ func TestSyncMaxAttendeesHeadcount_FiniteToFinite(t *testing.T) {
 	}
 }
 
-func newEventReadTestRouter(mongoStore db.MongoStore, userID string) *gin.Engine {
+func newEventReadTestRouter(mongoStore db.MongoStore, userID string, accessLevel int) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewEventHandler(&db.Stores{Mongo: mongoStore})
@@ -320,6 +353,7 @@ func newEventReadTestRouter(mongoStore db.MongoStore, userID string) *gin.Engine
 	router.Use(func(c *gin.Context) {
 		if userID != "" {
 			c.Set("userID", userID)
+			c.Set("accessLevel", accessLevel)
 		}
 		c.Next()
 	})
@@ -336,7 +370,7 @@ func TestGetEvents_Unauthenticated_OmitsRegistrationStatus(t *testing.T) {
 			{ID: "event-1", Name: "Hack Night"},
 		},
 	}
-	router := newEventReadTestRouter(mongoStore, "")
+	router := newEventReadTestRouter(mongoStore, "", 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/events", nil)
 	w := httptest.NewRecorder()
@@ -374,7 +408,7 @@ func TestGetEvents_Authenticated_ReturnsRegistrationStatus(t *testing.T) {
 		},
 		WaitlistedEventIDs: map[string]bool{},
 	}
-	router := newEventReadTestRouter(mongoStore, "user-1")
+	router := newEventReadTestRouter(mongoStore, "user-1", 1)
 
 	req := httptest.NewRequest(http.MethodGet, "/events", nil)
 	w := httptest.NewRecorder()
@@ -417,7 +451,7 @@ func TestGetEvents_Authenticated_WaitlistOverridesRejected(t *testing.T) {
 			"event-1": true,
 		},
 	}
-	router := newEventReadTestRouter(mongoStore, "user-1")
+	router := newEventReadTestRouter(mongoStore, "user-1", 1)
 
 	req := httptest.NewRequest(http.MethodGet, "/events", nil)
 	w := httptest.NewRecorder()
@@ -447,7 +481,7 @@ func TestGetEvents_Authenticated_WaitlistOnly(t *testing.T) {
 			"event-1": true,
 		},
 	}
-	router := newEventReadTestRouter(mongoStore, "user-1")
+	router := newEventReadTestRouter(mongoStore, "user-1", 1)
 
 	req := httptest.NewRequest(http.MethodGet, "/events", nil)
 	w := httptest.NewRecorder()
@@ -475,7 +509,7 @@ func TestGetEvents_Authenticated_NoStatus_ReturnsNone(t *testing.T) {
 		RegistrationStatuses: map[string]models.Status{},
 		WaitlistedEventIDs:   map[string]bool{},
 	}
-	router := newEventReadTestRouter(mongoStore, "user-1")
+	router := newEventReadTestRouter(mongoStore, "user-1", 1)
 
 	req := httptest.NewRequest(http.MethodGet, "/events", nil)
 	w := httptest.NewRecorder()
@@ -500,7 +534,7 @@ func TestGetEvents_Returns500_WhenRegistrationLookupFails(t *testing.T) {
 		Events:                  []models.Event{{ID: "event-1", Name: "Hack Night"}},
 		RegistrationStatusesErr: errors.New("boom"),
 	}
-	router := newEventReadTestRouter(mongoStore, "user-1")
+	router := newEventReadTestRouter(mongoStore, "user-1", 1)
 
 	req := httptest.NewRequest(http.MethodGet, "/events", nil)
 	w := httptest.NewRecorder()
@@ -517,7 +551,7 @@ func TestGetEvents_Returns500_WhenWaitlistLookupFails(t *testing.T) {
 		RegistrationStatuses:  map[string]models.Status{},
 		WaitlistedEventIDsErr: errors.New("boom"),
 	}
-	router := newEventReadTestRouter(mongoStore, "user-1")
+	router := newEventReadTestRouter(mongoStore, "user-1", 1)
 
 	req := httptest.NewRequest(http.MethodGet, "/events", nil)
 	w := httptest.NewRecorder()
@@ -532,7 +566,7 @@ func TestGetEventByID_Unauthenticated_OmitsRegistrationStatus(t *testing.T) {
 	mongoStore := &mocks.MockMongoStore{
 		Event: &models.Event{ID: "event-1", Name: "Hack Night"},
 	}
-	router := newEventReadTestRouter(mongoStore, "")
+	router := newEventReadTestRouter(mongoStore, "", 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/events/event-1", nil)
 	w := httptest.NewRecorder()
@@ -560,7 +594,7 @@ func TestGetEventByID_Authenticated_ReturnsRegistered(t *testing.T) {
 		},
 		WaitlistedEventIDs: map[string]bool{},
 	}
-	router := newEventReadTestRouter(mongoStore, "user-1")
+	router := newEventReadTestRouter(mongoStore, "user-1", 1)
 
 	req := httptest.NewRequest(http.MethodGet, "/events/event-1", nil)
 	w := httptest.NewRecorder()
@@ -590,7 +624,7 @@ func TestGetEventByID_Authenticated_ReturnsWaitlisted(t *testing.T) {
 			"event-1": true,
 		},
 	}
-	router := newEventReadTestRouter(mongoStore, "user-1")
+	router := newEventReadTestRouter(mongoStore, "user-1", 1)
 
 	req := httptest.NewRequest(http.MethodGet, "/events/event-1", nil)
 	w := httptest.NewRecorder()
@@ -614,7 +648,7 @@ func TestGetEventByID_NotFound(t *testing.T) {
 	mongoStore := &mocks.MockMongoStore{
 		EventErr: mongo.ErrNoDocuments,
 	}
-	router := newEventReadTestRouter(mongoStore, "user-1")
+	router := newEventReadTestRouter(mongoStore, "", 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/events/event-1", nil)
 	w := httptest.NewRecorder()
@@ -689,5 +723,42 @@ func TestResolveEventRegistrationStatus(t *testing.T) {
 				t.Fatalf("expected %s, got %s", tt.expected, result)
 			}
 		})
+	}
+}
+
+func TestGetEventByID_IncludesPublishFields(t *testing.T) {
+	publishDate := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	publishedAt := time.Date(2026, 5, 1, 12, 5, 0, 0, time.UTC)
+
+	mongoStore := &mocks.MockMongoStore{
+		Event: &models.Event{
+			ID:          "event-1",
+			Name:        "Hack Night",
+			PublishDate: &publishDate,
+			PublishedAt: &publishedAt,
+		},
+		RegistrationStatuses: map[string]models.Status{},
+		WaitlistedEventIDs:   map[string]bool{},
+	}
+	router := newEventReadTestRouter(mongoStore, "user-1", 1)
+
+	req := httptest.NewRequest(http.MethodGet, "/events/event-1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if _, ok := body["publish_date"]; !ok {
+		t.Fatal("expected publish_date in response")
+	}
+	if _, ok := body["published_at"]; !ok {
+		t.Fatal("expected published_at in response")
 	}
 }

@@ -40,18 +40,11 @@ func InitWaitlistIndexes() error {
 
 func (s *mongoStore) CreateWaitlistEntry(ctx context.Context, entry models.WaitlistEntry) error {
 	entry.CreatedAt = time.Now().UTC()
-
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	_, err := s.waitlists.InsertOne(ctx, entry)
 	return err
 }
 
 func (s *mongoStore) HasWaitlistEntry(ctx context.Context, eventID string, userID string) (bool, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	filter := bson.M{
 		"event_id": eventID,
 		"user_id":  userID,
@@ -69,13 +62,9 @@ func (s *mongoStore) HasWaitlistEntry(ctx context.Context, eventID string, userI
 }
 
 func (s *mongoStore) CountWaitlistEntries(ctx context.Context, eventID string) (int64, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	filter := bson.M{
 		"event_id": eventID,
 	}
-
 	return s.waitlists.CountDocuments(ctx, filter)
 }
 

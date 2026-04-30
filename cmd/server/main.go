@@ -94,7 +94,11 @@ func main() {
 	r := gin.Default()
 
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{cfg.ClientURL}
+	config.AllowOrigins = []string{
+		cfg.ClientURL,
+		"http://localhost:3000",
+		"http://localhost:3001",
+	}
 	config.AllowCredentials = true
 	config.AddAllowHeaders("Authorization")
 	r.Use(cors.New(config))
@@ -109,6 +113,10 @@ func main() {
 	// public event reads can use optional auth so authenticated callers receive personalized event metadata
 	events.Use(middleware.OptionalAuth(cfg.ClientAPIURL))
 	{
+		events.GET("/registrations/:request_id", eventHandler.GetRegistrationStatus)
+		events.GET("/", eventHandler.GetEvents)
+		events.GET("/:id", eventHandler.GetEventByID)
+
 		events.GET("/registrations/:request_id", eventHandler.GetRegistrationStatus)
 		events.GET("/", eventHandler.GetEvents)
 		events.GET("/:id", eventHandler.GetEventByID)
@@ -186,4 +194,25 @@ func gracefulShutdown(cancel context.CancelFunc, wg *sync.WaitGroup, errChan <-c
 	// Wait for all goroutines to exit.
 	wg.Wait()
 	log.Println("shutdown complete.")
+}
+
+func runPublishScheduler(ctx context.Context, stores *db.Stores) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			updated, err := stores.Mongo.PublishDueEvents(ctx, time.Now().UTC())
+			if err != nil {
+				log.Printf("publish scheduler error: %v", err)
+				continue
+			}
+			if updated > 0 {
+				log.Printf("auto-published %d event(s)", updated)
+			}
+		}
+	}
 }

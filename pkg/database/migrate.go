@@ -13,7 +13,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-
 func AutoMigrateDefaults(ctx context.Context, coll *mongo.Collection, model any) (int64, error) {
 	t := reflect.TypeOf(model)
 	for t != nil && t.Kind() == reflect.Pointer {

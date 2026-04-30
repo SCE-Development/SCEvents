@@ -155,7 +155,7 @@ func TestReleaseEventSeat(t *testing.T) {
 	}
 }
 
-func TestReleaseEventSeatUnlimitedEvent(t *testing.T) {
+func TestReleaseEventSeatNegativeHeadcountFallback(t *testing.T) {
 	store := newTestRedisStore(t)
 
 	if err := store.SetEventHeadcount(context.Background(), "event-1", -1); err != nil {

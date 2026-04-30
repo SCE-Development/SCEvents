@@ -515,7 +515,7 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 	})
 }
 
-// RegisterForEvent writes a pending registration to MongoDB, publishes a reference message to Kafka, and returns 202 Accepted.
+// RegisterForEvent
 func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		eventID := c.Param("id")
@@ -640,6 +640,8 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 		}
 
 		if err := h.stores.Mongo.MarkRegistrationAccepted(c.Request.Context(), created.RequestID); err != nil {
+			// Only release a Redis seat if this event is capacity-limited
+			// Unlimited events do not have a Redis headcount entry
 			if ev.MaxAttendees != -1 && seatTaken {
 				_ = h.stores.Redis.ReleaseEventSeat(c.Request.Context(), eventID)
 			}

@@ -220,9 +220,9 @@ func (e *Event) IsListedAdmin(userID string) bool {
 	return false
 }
 
-// CanEdit reports whether the caller may modify this event.
-// If Admins is empty, the event is treated as admin-less and any site admin may edit it.
-// Otherwise, only user IDs explicitly listed in Admins may edit it.
+// CanEdit reports whether the caller may modify this event
+// If Admins is empty, the event is treated as admin-less and any site admin may edit it
+// Otherwise, only user IDs explicitly listed in Admins may edit it
 func (e *Event) CanEdit(userID, callerSiteRole string) bool {
 	if len(e.Admins) == 0 {
 		return strings.EqualFold(strings.TrimSpace(callerSiteRole), RoleAdmin)
