@@ -29,14 +29,14 @@ services:
   server:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     ports:
       - "${SERVER_PORT:-8002}:${SERVER_PORT:-8002}"
     depends_on:
       mongodb:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
     environment:
@@ -48,6 +48,10 @@ services:
       - SERVER_PORT=${SERVER_PORT:-8002}
       - CLIENT_URL=${CLIENT_URL:-http://localhost:3000}
       - CLIENT_API_URL=${CLIENT_API_URL:-http://host.docker.internal:8080}
+    volumes:
+      - .:/app
+      - go-mod-cache:/go/pkg/mod
+    command: ["air", "-c", ".air.toml"]
 
   kafka:
     image: apache/kafka:3.8.0
@@ -87,3 +91,6 @@ services:
       - |
         /opt/kafka/bin/kafka-topics.sh --create --topic registrations --bootstrap-server kafka:29092 --partitions 1 --replication-factor 1 --if-not-exists
         echo "Topic registrations created or already exists"
+
+volumes:
+  go-mod-cache:
