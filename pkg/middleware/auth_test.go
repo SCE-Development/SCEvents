@@ -16,9 +16,11 @@ func setupRouter(minimumState int, clientAPIURL string) *gin.Engine {
 	r.GET("/test", func(c *gin.Context) {
 		userID, _ := c.Get("userID")
 		userRole, _ := c.Get("userRole")
+		accessLevel, _ := c.Get("accessLevel")
 		c.JSON(http.StatusOK, gin.H{
-			"userID":   userID,
-			"userRole": userRole,
+			"userID":      userID,
+			"userRole":    userRole,
+			"accessLevel": accessLevel,
 		})
 	})
 	return r
@@ -65,6 +67,17 @@ func TestRequireAuth(t *testing.T) {
 				"accessLevel": float64(MembershipStatePending),
 			},
 			minimumState:   MembershipStateMember,
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:       "officer token fails admin requirement",
+			authHeader: "Bearer valid-token",
+			mockAPIStatus: http.StatusOK,
+			mockAPIResponse: map[string]interface{}{
+				"_id":         "officer-1",
+				"accessLevel": float64(MembershipStateOfficer),
+			},
+			minimumState:   MembershipStateAdmin,
 			expectedStatus: http.StatusForbidden,
 		},
 		{
@@ -128,14 +141,14 @@ func TestRequireAuth(t *testing.T) {
 			}
 
 			if w.Code == http.StatusOK {
-				var response map[string]string
+				var response map[string]interface{}
 				_ = json.Unmarshal(w.Body.Bytes(), &response)
-				
+
 				if response["userID"] != tt.expectedUserID {
-					t.Errorf("expected userID %s, got %s", tt.expectedUserID, response["userID"])
+					t.Errorf("expected userID %s, got %v", tt.expectedUserID, response["userID"])
 				}
 				if response["userRole"] != tt.expectedRole {
-					t.Errorf("expected userRole %s, got %s", tt.expectedRole, response["userRole"])
+					t.Errorf("expected userRole %s, got %v", tt.expectedRole, response["userRole"])
 				}
 			}
 		})
@@ -149,9 +162,11 @@ func setupOptionalAuthRouter(clientAPIURL string) *gin.Engine {
 	r.GET("/test", func(c *gin.Context) {
 		userID, _ := c.Get("userID")
 		userRole, _ := c.Get("userRole")
+		accessLevel, _ := c.Get("accessLevel")
 		c.JSON(http.StatusOK, gin.H{
-			"userID":   userID,
-			"userRole": userRole,
+			"userID":      userID,
+			"userRole":    userRole,
+			"accessLevel": accessLevel,
 		})
 	})
 	return r
@@ -215,16 +230,19 @@ func TestOptionalAuth_SetsContextForValidToken(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", w.Code)
 	}
 
-	var response map[string]string
+	var response map[string]interface{}
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected valid JSON, got %v", err)
 	}
 
 	if response["userID"] != "user-123" {
-		t.Fatalf("expected userID user-123, got %s", response["userID"])
+		t.Fatalf("expected userID user-123, got %v", response["userID"])
 	}
 	if response["userRole"] != "User" {
-		t.Fatalf("expected userRole User, got %s", response["userRole"])
+		t.Fatalf("expected userRole User, got %v", response["userRole"])
+	}
+	if int(response["accessLevel"].(float64)) != MembershipStateMember {
+		t.Fatalf("expected accessLevel 1, got %v", response["accessLevel"])
 	}
 }
 

@@ -29,6 +29,7 @@ type MockMongoStore struct {
 	WaitlistedEventIDsErr      error
 	Events                     []models.Event
 	EventsErr                  error
+	CreatedEvent               *models.Event
 }
 
 func (m *MockMongoStore) GetEvents(_ context.Context, _, _ string) ([]models.Event, error) {
@@ -38,6 +39,7 @@ func (m *MockMongoStore) GetEventByID(_ context.Context, _ string) (*models.Even
 	return m.Event, m.EventErr
 }
 func (m *MockMongoStore) CreateEvent(_ context.Context, e models.Event) (*models.Event, error) {
+	m.CreatedEvent = &e
 	return &e, nil
 }
 func (m *MockMongoStore) DeleteEventByID(_ context.Context, _ string) error {

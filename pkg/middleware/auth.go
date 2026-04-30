@@ -41,6 +41,7 @@ func RequireAuth(minimumState int, clientAPIURL string) gin.HandlerFunc {
 
 		c.Set("userID", userID)
 		c.Set("userRole", role)
+		c.Set("accessLevel", accessLevel)
 		c.Next()
 	}
 }
@@ -100,7 +101,7 @@ func OptionalAuth(clientAPIURL string) gin.HandlerFunc {
 			return
 		}
 
-		userID, role, _, err := verifyAuthHeader(authHeader, clientAPIURL)
+		userID, role, accessLevel, err := verifyAuthHeader(authHeader, clientAPIURL)
 		if err != nil {
 			// if not success, the token was invalid or the API is down
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token verification failed"})
@@ -109,6 +110,7 @@ func OptionalAuth(clientAPIURL string) gin.HandlerFunc {
 
 		c.Set("userID", userID)
 		c.Set("userRole", role)
+		c.Set("accessLevel", accessLevel)
 		c.Next()
 	}
 }

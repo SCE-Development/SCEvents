@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/SCE-Development/SCEvents/pkg/db"
@@ -113,6 +115,127 @@ func TestGetEventAttendanceSummary(t *testing.T) {
 		}
 	})
 }
+
+func newCreateEventTestRouter(mongoStore db.MongoStore, redisStore db.RedisStore, userID string) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := NewEventHandler(&db.Stores{Mongo: mongoStore, Redis: redisStore})
+	router.Use(func(c *gin.Context) {
+		c.Set("userID", userID)
+		c.Set("userRole", models.RoleAdmin)
+		c.Next()
+	})
+	router.POST("/events", handler.CreateEvent)
+	return router
+}
+
+func TestCreateEventForcesCreatorIntoAdmins(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{}
+	redisStore := &mocks.MockRedisStore{}
+	router := newCreateEventTestRouter(mongoStore, redisStore, "creator-1")
+
+	body := []byte(`{
+		"id": "event-1",
+		"name": "Hack Night",
+		"date": "2026-05-01",
+		"time": "18:00",
+		"location": "SCE",
+		"description": "Build things",
+		"admins": ["admin-2"],
+		"registration_form": [],
+		"max_attendees": -1,
+		"created_at": "2026-04-28T00:00:00Z",
+		"waitlist_enabled": false
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/events", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
+	}
+	if mongoStore.CreatedEvent == nil {
+		t.Fatal("expected event to be created")
+	}
+	expectedAdmins := []string{"admin-2", "creator-1"}
+	if !reflect.DeepEqual(mongoStore.CreatedEvent.Admins, expectedAdmins) {
+		t.Fatalf("expected admins %v, got %v", expectedAdmins, mongoStore.CreatedEvent.Admins)
+	}
+	if redisStore.SetCalled {
+		t.Fatal("did not expect Redis headcount for unlimited event")
+	}
+}
+
+func TestCreateEventDedupesCreatorAdmin(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{}
+	redisStore := &mocks.MockRedisStore{}
+	router := newCreateEventTestRouter(mongoStore, redisStore, "creator-1")
+
+	body := []byte(`{
+		"id": "event-1",
+		"name": "Hack Night",
+		"date": "2026-05-01",
+		"time": "18:00",
+		"location": "SCE",
+		"description": "Build things",
+		"admins": [" creator-1 ", "admin-2", "creator-1"],
+		"registration_form": [],
+		"max_attendees": 20,
+		"created_at": "2026-04-28T00:00:00Z",
+		"waitlist_enabled": false
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/events", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
+	}
+	expectedAdmins := []string{"creator-1", "admin-2"}
+	if !reflect.DeepEqual(mongoStore.CreatedEvent.Admins, expectedAdmins) {
+		t.Fatalf("expected admins %v, got %v", expectedAdmins, mongoStore.CreatedEvent.Admins)
+	}
+	if !redisStore.SetCalled || redisStore.SetCapacity != 20 {
+		t.Fatalf("expected Redis headcount capacity 20, got called=%v capacity=%d", redisStore.SetCalled, redisStore.SetCapacity)
+	}
+}
+
+func TestCreateEventRejectsMissingCreatorID(t *testing.T) {
+	mongoStore := &mocks.MockMongoStore{}
+	redisStore := &mocks.MockRedisStore{}
+	router := newCreateEventTestRouter(mongoStore, redisStore, "")
+
+	body := []byte(`{
+		"id": "event-1",
+		"name": "Hack Night",
+		"date": "2026-05-01",
+		"time": "18:00",
+		"location": "SCE",
+		"description": "Build things",
+		"admins": ["admin-2"],
+		"registration_form": [],
+		"max_attendees": -1,
+		"created_at": "2026-04-28T00:00:00Z",
+		"waitlist_enabled": false
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/events", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d: %s", w.Code, w.Body.String())
+	}
+	if mongoStore.CreatedEvent != nil {
+		t.Fatal("did not expect event to be created")
+	}
+}
+
 
 func newTestHandler(redis db.RedisStore) *EventHandler {
 	return &EventHandler{

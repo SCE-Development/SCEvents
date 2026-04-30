@@ -234,6 +234,17 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 
 	event.ApplyDefaults()
 
+	creatorID := strings.TrimSpace(c.GetString("userID"))
+	if creatorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "creator user id is required",
+		})
+		return
+	}
+
+	event.Admins = sanitizeAdmins(event.Admins)
+	event.Admins = ensureCreatorIsEventAdmin(event.Admins, creatorID)
+
 	if err := event.Validate(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -241,7 +252,7 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		return
 	}
 
-	createdEvent, err := db.CreateEvent(event)
+	createdEvent, err := h.stores.Mongo.CreateEvent(c.Request.Context(), event)
 	if err != nil {
 		log.Printf("CreateEvent error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -262,6 +273,34 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, createdEvent)
+}
+
+func sanitizeAdmins(admins []string) []string {
+	seen := make(map[string]struct{}, len(admins))
+	normalized := make([]string, 0, len(admins))
+
+	for _, admin := range admins {
+		admin = strings.TrimSpace(admin)
+		if admin == "" {
+			continue
+		}
+		if _, ok := seen[admin]; ok {
+			continue
+		}
+		seen[admin] = struct{}{}
+		normalized = append(normalized, admin)
+	}
+
+	return normalized
+}
+
+func ensureCreatorIsEventAdmin(admins []string, creatorID string) []string {
+	for _, admin := range admins {
+		if admin == creatorID {
+			return admins
+		}
+	}
+	return append(admins, creatorID)
 }
 
 // deletes an event by ID
@@ -399,6 +438,10 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 
 	if _, ok := fields["minimum_visible_role"]; ok {
 		fields["minimum_visible_role"] = updatedEvent.MinimumVisibleRole
+	}
+
+	if _, ok := fields["admins"]; ok {
+		fields["admins"] = sanitizeAdmins(updatedEvent.Admins)
 	}
 
 	err = db.UpdateEventByID(id, fields)
