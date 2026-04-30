@@ -29,7 +29,7 @@ services:
   server:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: docker/Dockerfile.dev
     ports:
       - "${SERVER_PORT:-8002}:${SERVER_PORT:-8002}"
     depends_on:

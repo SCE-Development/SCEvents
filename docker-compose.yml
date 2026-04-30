@@ -64,7 +64,7 @@ services:
   scevents-server:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
     restart: unless-stopped
     depends_on:
       scevents-mongodb:
