@@ -123,12 +123,12 @@ func main() {
 			protected.POST("/:id/waitlist", eventHandler.JoinEventWaitlist)
 		}
 
-		adminProtected := events.Group("/")
-		adminProtected.Use(middleware.RequireAuth(middleware.MembershipStateOfficer, cfg.ClientAPIURL))
+		officerProtected := events.Group("/")
+		officerProtected.Use(middleware.RequireAuth(middleware.MembershipStateOfficer, cfg.ClientAPIURL))
 		{
-			adminProtected.POST("/", eventHandler.CreateEvent)
-			adminProtected.DELETE("/:id", eventHandler.DeleteEventByID)
-			adminProtected.PATCH("/:id", eventHandler.UpdateEventByID)
+			officerProtected.POST("/", eventHandler.CreateEvent)
+			officerProtected.DELETE("/:id", eventHandler.DeleteEventByID)
+			officerProtected.PATCH("/:id", eventHandler.UpdateEventByID)
 		}
 	}
 
