@@ -82,7 +82,7 @@ func buildVisibilityFilter(viewer models.EventViewer) bson.M {
 	return bson.M{"$or": conditions}
 }
 
-// GetVisiblleEvents retrieves events from the database that are visible to the specified viewer and fall within the given date range, 
+// GetVisibleEvents retrieves events from the database that are visible to the specified viewer and fall within the given date range,
 // applying appropriate filters based on event status, visibility, and viewer access level
 func (s *mongoStore) GetVisibleEvents(ctx context.Context, viewer models.EventViewer, startDate, endDate string) ([]models.Event, error) {
 	filter := bson.M{
@@ -139,64 +139,40 @@ func (s *mongoStore) GetVisibleEventByID(ctx context.Context, viewer models.Even
 }
 
 // creates a new event in the database
-func CreateEvent(e models.Event) (*models.Event, error) {
-	coll := GetEventsCollection()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
+func (s *mongoStore) CreateEvent(ctx context.Context, e models.Event) (*models.Event, error) {
 	if e.ID == "" {
 		e.ID = primitive.NewObjectID().Hex()
 	}
-
-	_, err := coll.InsertOne(ctx, e)
+	_, err := s.events.InsertOne(ctx, e)
 	if err != nil {
 		return nil, err
 	}
-
 	return &e, nil
 }
 
 // deletes an event by ID
-func DeleteEventByID(id string) error {
-	coll := GetEventsCollection()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	result, err := coll.DeleteOne(ctx, bson.M{"_id": id})
+func (s *mongoStore) DeleteEventByID(ctx context.Context, id string) error {
+	result, err := s.events.DeleteOne(ctx, bson.M{"_id": id})
 	if err != nil {
 		return err
 	}
-
 	if result.DeletedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
-
 	return nil
 }
 
 // UpdateEventByID performs a partial update on an event document.
 // Only fields present in the provided map are updated via $set.
-func UpdateEventByID(id string, fields map[string]interface{}) error {
-	coll := GetEventsCollection()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	update := bson.M{
-		"$set": fields,
-	}
-
-	result, err := coll.UpdateOne(ctx, bson.M{"_id": id}, update)
+func (s *mongoStore) UpdateEventByID(ctx context.Context, id string, fields map[string]interface{}) error {
+	update := bson.M{"$set": fields}
+	result, err := s.events.UpdateOne(ctx, bson.M{"_id": id}, update)
 	if err != nil {
 		return err
 	}
-
 	if result.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
-
 	return nil
 }
 
@@ -221,14 +197,14 @@ func (s *mongoStore) GetEvents(ctx context.Context, startDate, endDate string) (
 			},
 		},
 	}
+
 	cursor, err := s.events.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = cursor.Close(ctx)
-	}()
-	events := make([]models.Event, 0)
+	defer func() { _ = cursor.Close(ctx) }()
+
+	var events []models.Event
 	if err := cursor.All(ctx, &events); err != nil {
 		return nil, err
 	}
@@ -242,42 +218,6 @@ func (s *mongoStore) GetEventByID(ctx context.Context, id string) (*models.Event
 		return nil, err
 	}
 	return &e, nil
-}
-
-func (s *mongoStore) CreateEvent(ctx context.Context, e models.Event) (*models.Event, error) {
-	if e.ID == "" {
-		e.ID = primitive.NewObjectID().Hex()
-	}
-	_, err := s.events.InsertOne(ctx, e)
-	if err != nil {
-		return nil, err
-	}
-	return &e, nil
-}
-
-func (s *mongoStore) DeleteEventByID(ctx context.Context, id string) error {
-	result, err := s.events.DeleteOne(ctx, bson.M{"_id": id})
-	if err != nil {
-		return err
-	}
-	if result.DeletedCount == 0 {
-		return mongo.ErrNoDocuments
-	}
-	return nil
-}
-
-func (s *mongoStore) UpdateEventByID(ctx context.Context, id string, fields map[string]interface{}) error {
-	update := bson.M{
-		"$set": fields,
-	}
-	result, err := s.events.UpdateOne(ctx, bson.M{"_id": id}, update)
-	if err != nil {
-		return err
-	}
-	if result.MatchedCount == 0 {
-		return mongo.ErrNoDocuments
-	}
-	return nil
 }
 
 // PublishDueEvents promotes due draft events to published

@@ -113,10 +113,6 @@ func main() {
 		events.GET("/", eventHandler.GetEvents)
 		events.GET("/:id", eventHandler.GetEventByID)
 
-		events.GET("/registrations/:request_id", eventHandler.GetRegistrationStatus)
-		events.GET("/", eventHandler.GetEvents)
-		events.GET("/:id", eventHandler.GetEventByID)
-
 		protected := events.Group("/")
 		protected.Use(middleware.RequireAuth(middleware.MembershipStateNonMember, cfg.ClientAPIURL))
 		{

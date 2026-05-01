@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 	"time"
-	"time"
 
 	"github.com/SCE-Development/SCEvents/pkg/models"
 	"go.mongodb.org/mongo-driver/bson"
@@ -166,10 +165,8 @@ func TestUpdateEventByID(t *testing.T) {
 }
 
 func TestGetVisibleEvents(t *testing.T) {
-func TestGetVisibleEvents(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
-	mt.Run("returns matching visible events", func(mt *mtest.T) {
 	mt.Run("returns matching visible events", func(mt *mtest.T) {
 		store := NewMongoStore(mt.Coll, nil, nil)
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
@@ -180,8 +177,6 @@ func TestGetVisibleEvents(t *testing.T) {
 				{Key: "name", Value: "Event One"},
 				{Key: "status", Value: models.StatusPublished},
 				{Key: "visibility", Value: models.VisibilityPublic},
-				{Key: "status", Value: models.StatusPublished},
-				{Key: "visibility", Value: models.VisibilityPublic},
 				{Key: "date", Value: "2026-05-01"},
 				{Key: "time", Value: "10:00"},
 				{Key: "location", Value: "Room 101"},
@@ -189,8 +184,6 @@ func TestGetVisibleEvents(t *testing.T) {
 			bson.D{
 				{Key: "_id", Value: "event-2"},
 				{Key: "name", Value: "Event Two"},
-				{Key: "status", Value: models.StatusPublished},
-				{Key: "visibility", Value: models.VisibilityPublic},
 				{Key: "status", Value: models.StatusPublished},
 				{Key: "visibility", Value: models.VisibilityPublic},
 				{Key: "date", Value: "2026-05-15"},
@@ -223,83 +216,6 @@ func TestGetVisibleEvents(t *testing.T) {
 		}
 		if len(events) != 0 {
 			t.Fatalf("expected 0 events, got %d", len(events))
-		}
-	})
-}
-
-func TestGetVisibleEventByID(t *testing.T) {
-	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
-
-	mt.Run("found", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil, nil)
-		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
-
-		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch,
-			bson.D{
-				{Key: "_id", Value: "event-1"},
-				{Key: "name", Value: "Visible Event"},
-				{Key: "status", Value: models.StatusPublished},
-				{Key: "visibility", Value: models.VisibilityPublic},
-				{Key: "date", Value: "2026-05-01"},
-				{Key: "time", Value: "10:00"},
-				{Key: "location", Value: "Room 101"},
-			},
-		))
-
-		event, err := store.GetVisibleEventByID(context.Background(), models.EventViewer{}, "event-1")
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-		if event.ID != "event-1" {
-			t.Fatalf("expected event-1, got %s", event.ID)
-		}
-	})
-
-	mt.Run("not found", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil, nil)
-		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
-
-		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch))
-
-		_, err := store.GetVisibleEventByID(context.Background(), models.EventViewer{}, "missing")
-		if err != mongo.ErrNoDocuments {
-			t.Fatalf("expected ErrNoDocuments, got %v", err)
-		}
-	})
-}
-
-func TestPublishDueEvents(t *testing.T) {
-	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
-
-	mt.Run("publishes due draft events", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil, nil)
-
-		mt.AddMockResponses(bson.D{
-			{Key: "ok", Value: 1},
-			{Key: "n", Value: int32(2)},
-			{Key: "nModified", Value: int32(2)},
-		})
-
-		updated, err := store.PublishDueEvents(context.Background(), time.Now().UTC())
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-		if updated != 2 {
-			t.Fatalf("expected 2 updated docs, got %d", updated)
-		}
-	})
-
-	mt.Run("returns error on command failure", func(mt *mtest.T) {
-		store := NewMongoStore(mt.Coll, nil, nil)
-
-		mt.AddMockResponses(mtest.CreateCommandErrorResponse(mtest.CommandError{
-			Code:    10107,
-			Message: "not primary",
-		}))
-
-		_, err := store.PublishDueEvents(context.Background(), time.Now().UTC())
-		if err == nil {
-			t.Fatal("expected error, got nil")
 		}
 	})
 }
