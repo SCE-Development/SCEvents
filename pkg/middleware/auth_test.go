@@ -28,14 +28,15 @@ func setupRouter(minimumState int, clientAPIURL string) *gin.Engine {
 
 func TestRequireAuth(t *testing.T) {
 	tests := []struct {
-		name               string
-		authHeader         string
-		mockAPIStatus      int
-		mockAPIResponse    interface{}
-		minimumState       int
-		expectedStatus     int
-		expectedRole       string
-		expectedUserID     string
+		name                string
+		authHeader          string
+		mockAPIStatus       int
+		mockAPIResponse     interface{}
+		minimumState        int
+		expectedStatus      int
+		expectedRole        string
+		expectedUserID      string
+		expectedAccessLevel int
 	}{
 		{
 			name:           "missing auth header",
@@ -51,16 +52,16 @@ func TestRequireAuth(t *testing.T) {
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:       "api returns invalid json",
-			authHeader: "Bearer valid-token",
-			mockAPIStatus: http.StatusOK,
+			name:            "api returns invalid json",
+			authHeader:      "Bearer valid-token",
+			mockAPIStatus:   http.StatusOK,
 			mockAPIResponse: "invalid json", // It'll be sent as string without json encoding for testing fail in Unmarshal if not careful, wait I'll handle that in mock handler
-			minimumState: MembershipStateMember,
-			expectedStatus: http.StatusUnauthorized,
+			minimumState:    MembershipStateMember,
+			expectedStatus:  http.StatusUnauthorized,
 		},
 		{
-			name:       "api returns insufficient access level",
-			authHeader: "Bearer valid-token",
+			name:          "api returns insufficient access level",
+			authHeader:    "Bearer valid-token",
 			mockAPIStatus: http.StatusOK,
 			mockAPIResponse: map[string]interface{}{
 				"_id":         "user-1",
@@ -70,41 +71,46 @@ func TestRequireAuth(t *testing.T) {
 			expectedStatus: http.StatusForbidden,
 		},
 		{
-			name:       "officer token fails admin requirement",
-			authHeader: "Bearer valid-token",
-			mockAPIStatus: http.StatusOK,
-			mockAPIResponse: map[string]interface{}{
-				"_id":         "officer-1",
-				"accessLevel": float64(MembershipStateOfficer),
-			},
-			minimumState:   MembershipStateAdmin,
-			expectedStatus: http.StatusForbidden,
-		},
-		{
-			name:       "valid member token",
-			authHeader: "Bearer valid-token",
+			name:          "valid member token",
+			authHeader:    "Bearer valid-token",
 			mockAPIStatus: http.StatusOK,
 			mockAPIResponse: map[string]interface{}{
 				"_id":         "user-1",
 				"accessLevel": float64(MembershipStateMember),
 			},
-			minimumState:   MembershipStateMember,
-			expectedStatus: http.StatusOK,
-			expectedRole:   "User",
-			expectedUserID: "user-1",
+			minimumState:        MembershipStateMember,
+			expectedStatus:      http.StatusOK,
+			expectedRole:        "member",
+			expectedUserID:      "user-1",
+			expectedAccessLevel: MembershipStateMember,
 		},
 		{
-			name:       "valid admin token",
-			authHeader: "Bearer valid-token",
+			name:          "valid officer token",
+			authHeader:    "Bearer valid-token",
 			mockAPIStatus: http.StatusOK,
 			mockAPIResponse: map[string]interface{}{
 				"_id":         "admin-1",
 				"accessLevel": float64(MembershipStateOfficer),
 			},
-			minimumState:   MembershipStateMember,
-			expectedStatus: http.StatusOK,
-			expectedRole:   "Admin",
-			expectedUserID: "admin-1",
+			minimumState:        MembershipStateMember,
+			expectedStatus:      http.StatusOK,
+			expectedRole:        "officer",
+			expectedUserID:      "admin-1",
+			expectedAccessLevel: MembershipStateOfficer,
+		},
+		{
+			name:          "valid site admin token",
+			authHeader:    "Bearer valid-token",
+			mockAPIStatus: http.StatusOK,
+			mockAPIResponse: map[string]interface{}{
+				"_id":         "admin-1",
+				"accessLevel": float64(MembershipStateAdmin),
+			},
+			minimumState:        MembershipStateMember,
+			expectedStatus:      http.StatusOK,
+			expectedRole:        "admin",
+			expectedUserID:      "admin-1",
+			expectedAccessLevel: MembershipStateAdmin,
 		},
 	}
 
@@ -150,6 +156,10 @@ func TestRequireAuth(t *testing.T) {
 				if response["userRole"] != tt.expectedRole {
 					t.Errorf("expected userRole %s, got %v", tt.expectedRole, response["userRole"])
 				}
+
+				if int(response["accessLevel"].(float64)) != tt.expectedAccessLevel {
+					t.Errorf("expected accessLevel %d, got %v", tt.expectedAccessLevel, response["accessLevel"])
+				}
 			}
 		})
 	}
@@ -163,6 +173,7 @@ func setupOptionalAuthRouter(clientAPIURL string) *gin.Engine {
 		userID, _ := c.Get("userID")
 		userRole, _ := c.Get("userRole")
 		accessLevel, _ := c.Get("accessLevel")
+
 		c.JSON(http.StatusOK, gin.H{
 			"userID":      userID,
 			"userRole":    userRole,
@@ -238,11 +249,11 @@ func TestOptionalAuth_SetsContextForValidToken(t *testing.T) {
 	if response["userID"] != "user-123" {
 		t.Fatalf("expected userID user-123, got %v", response["userID"])
 	}
-	if response["userRole"] != "User" {
-		t.Fatalf("expected userRole User, got %v", response["userRole"])
+	if response["userRole"] != "member" {
+		t.Fatalf("expected userRole member, got %v", response["userRole"])
 	}
 	if int(response["accessLevel"].(float64)) != MembershipStateMember {
-		t.Fatalf("expected accessLevel 1, got %v", response["accessLevel"])
+		t.Fatalf("expected accessLevel %d, got %v", MembershipStateMember, response["accessLevel"])
 	}
 }
 
@@ -264,5 +275,50 @@ func TestOptionalAuth_RejectsInvalidToken(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401, got %d", w.Code)
+	}
+}
+
+func TestOptionalAuth_SetsContextForAdminToken(t *testing.T) {
+	authHeader := "Bearer admin-token"
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != authHeader {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"_id":         "admin-123",
+			"accessLevel": float64(MembershipStateAdmin),
+		})
+	}))
+	defer mockServer.Close()
+
+	router := setupOptionalAuthRouter(mockServer.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", authHeader)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if response["userID"] != "admin-123" {
+		t.Fatalf("expected userID admin-123, got %v", response["userID"])
+	}
+	if response["userRole"] != "admin" {
+		t.Fatalf("expected userRole admin, got %v", response["userRole"])
+	}
+	if int(response["accessLevel"].(float64)) != MembershipStateAdmin {
+		t.Fatalf("expected accessLevel %d, got %v", MembershipStateAdmin, response["accessLevel"])
 	}
 }

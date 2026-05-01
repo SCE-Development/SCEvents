@@ -41,22 +41,27 @@ type FormQuestion struct {
 }
 
 type Event struct {
-	ID                 string         `bson:"_id" json:"id"`
-	Name               string         `bson:"name" json:"name"`
-	Date               string         `bson:"date" json:"date"`
-	EndDate            string         `bson:"end_date,omitempty" json:"end_date,omitempty"`
-	Time               string         `bson:"time" json:"time"`
-	Location           string         `bson:"location" json:"location"`
-	Description        string         `bson:"description" json:"description"`
-	Admins             []string       `bson:"admins" json:"admins" default:"[]"`
-	RegistrationForm   []FormQuestion `bson:"registration_form" json:"registration_form" default:"[]"`
-	MaxAttendees       int            `bson:"max_attendees" json:"max_attendees" default:"0"`
-	CreatedAt          string         `bson:"created_at" json:"created_at"`
-	Status             string         `bson:"status" json:"status" default:"draft"`
-	Visibility         string         `bson:"visibility" json:"visibility" default:"public"`
-	MinimumVisibleRole string         `bson:"minimum_visible_role,omitempty" json:"minimum_visible_role,omitempty"`
-	WaitlistEnabled	   bool 		  `bson:"waitlist_enabled" json:"waitlist_enabled"`
-	WaitlistSize       int  		  `bson:"waitlist_size,omitempty" json:"waitlist_size,omitempty"`
+	ID               string         `bson:"_id" json:"id"`
+	Name             string         `bson:"name" json:"name"`
+	Date             string         `bson:"date" json:"date"`
+	EndDate          string         `bson:"end_date,omitempty" json:"end_date,omitempty"`
+	Time             string         `bson:"time" json:"time"`
+	Location         string         `bson:"location" json:"location"`
+	Description      string         `bson:"description" json:"description"`
+	Admins           []string       `bson:"admins" json:"admins" default:"[]"`
+	RegistrationForm []FormQuestion `bson:"registration_form" json:"registration_form" default:"[]"`
+	// MaxAttendees controls event capacity
+	// -1 means unlimited capacity (no Redis headcount tracking)
+	// Values > 0 are tracked in Redis for concurrency-safe registration
+	MaxAttendees       int        `bson:"max_attendees" json:"max_attendees" default:"-1"`
+	CreatedAt          string     `bson:"created_at" json:"created_at"`
+	Status             string     `bson:"status" json:"status" default:"draft"`
+	Visibility         string     `bson:"visibility" json:"visibility" default:"public"`
+	MinimumVisibleRole string     `bson:"minimum_visible_role,omitempty" json:"minimum_visible_role,omitempty"`
+	WaitlistEnabled    bool       `bson:"waitlist_enabled" json:"waitlist_enabled"`
+	WaitlistSize       int        `bson:"waitlist_size,omitempty" json:"waitlist_size,omitempty"`
+	PublishDate        *time.Time `bson:"publish_date,omitempty" json:"publish_date,omitempty"`
+	PublishedAt        *time.Time `bson:"published_at,omitempty" json:"published_at,omitempty"`
 }
 
 type RegistrationFormValidationError struct {
@@ -131,6 +136,14 @@ func (e *Event) Validate() error {
 		return fmt.Errorf("waitlist_size must be greater than 0 when waitlist_enabled is true")
 	}
 
+	if e.PublishDate != nil && e.PublishDate.IsZero() {
+		return fmt.Errorf("publish_date must be a valid datetime")
+	}
+
+	if e.Status == StatusClosed && e.PublishDate != nil {
+		return fmt.Errorf("closed events cannot have a publish_date")
+	}
+
 	if strings.TrimSpace(e.EndDate) != "" {
 		date, err := time.Parse("2006-01-02", e.Date)
 		if err != nil {
@@ -197,8 +210,8 @@ func ValidateMinimumVisibleRole(visibility string, role string) error {
 	}
 }
 
-// IsAdmin checks if the given userID is in the event's Admins list.
-func (e *Event) IsAdmin(userID string) bool {
+// IsListedAdmin reports whether the given userID is explicitly listed in the event's Admins list.
+func (e *Event) IsListedAdmin(userID string) bool {
 	for _, admin := range e.Admins {
 		if admin == userID {
 			return true
@@ -207,13 +220,14 @@ func (e *Event) IsAdmin(userID string) bool {
 	return false
 }
 
-// CanEdit reports whether the caller may modify this event.
-// Admin-less events require callerSiteRole=admin; otherwise userID must be in Admins.
+// CanEdit reports whether the caller may modify this event
+// If Admins is empty, the event is treated as admin-less and any site admin may edit it
+// Otherwise, only user IDs explicitly listed in Admins may edit it
 func (e *Event) CanEdit(userID, callerSiteRole string) bool {
 	if len(e.Admins) == 0 {
 		return strings.EqualFold(strings.TrimSpace(callerSiteRole), RoleAdmin)
 	}
-	return e.IsAdmin(userID)
+	return e.IsListedAdmin(userID)
 }
 
 func (e *Event) ValidateRegistration(answers map[string]any) error {
@@ -256,6 +270,7 @@ func SanitizeUpdateFields(fields map[string]interface{}) {
 	delete(fields, "id")
 	delete(fields, "_id")
 	delete(fields, "created_at")
+	delete(fields, "published_at")
 }
 
 // ApplyPatch applies supported PATCH fields onto the event.
@@ -347,7 +362,7 @@ func (e *Event) ApplyPatch(fields map[string]interface{}) error {
 				return fmt.Errorf("waitlist_size must be a number")
 			}
 			e.WaitlistSize = int(n)
-			
+
 		case "registration_form":
 			arr, ok := value.([]interface{})
 			if !ok {
@@ -416,9 +431,101 @@ func (e *Event) ApplyPatch(fields map[string]interface{}) error {
 				return fmt.Errorf("admins must include at least one user")
 			}
 			e.Admins = admins
+
+		case "publish_date":
+			if value == nil {
+				e.PublishDate = nil
+				break
+			}
+
+			s, ok := value.(string)
+			if !ok {
+				return fmt.Errorf("publish_date must be an RFC3339 datetime string or null")
+			}
+
+			parsed, err := time.Parse(time.RFC3339, s)
+			if err != nil {
+				return fmt.Errorf("publish_date must be a valid RFC3339 datetime")
+			}
+			parsed = parsed.UTC()
+			e.PublishDate = &parsed
 		}
 	}
 
 	e.normalize()
 	return nil
+}
+
+// ShouldAutoPublish reports whether the event should be automatically published based on its publish_date and current time
+func (e *Event) ShouldAutoPublish(now time.Time) bool {
+	if e.PublishDate == nil {
+		return false
+	}
+	if e.Status == StatusPublished || e.Status == StatusClosed {
+		return false
+	}
+	return !e.PublishDate.After(now.UTC())
+}
+
+// SyncPublicationState updates the event's status to published if it should be auto-published, and sets publish_date and published_at if missing
+func (e *Event) SyncPublicationState(now time.Time) {
+	now = now.UTC()
+
+	if e.Status == StatusPublished {
+		if e.PublishDate == nil {
+			t := now
+			e.PublishDate = &t
+		}
+		if e.PublishedAt == nil {
+			t := now
+			e.PublishedAt = &t
+		}
+		return
+	}
+
+	if e.ShouldAutoPublish(now) {
+		e.Status = StatusPublished
+		if e.PublishedAt == nil {
+			t := now
+			e.PublishedAt = &t
+		}
+	}
+}
+
+// CanView reports whether the given viewer can see this event based on its status, visibility, and minimum visible role
+func (e *Event) CanView(viewer EventViewer) bool {
+	// Site admins can view everything
+	if viewer.AccessLevel >= 3 {
+		return true
+	}
+
+	// Event-specific admins can view their own events, even if draft
+	if e.IsListedAdmin(viewer.UserID) {
+		return true
+	}
+
+	// Unpublished events are not visible to regular viewers
+	if e.Status != StatusPublished {
+		return false
+	}
+
+	// Public events are visible to everyone once published
+	if e.Visibility == VisibilityPublic {
+		return true
+	}
+
+	// Private published events require a minimum role
+	required := 0
+	switch e.MinimumVisibleRole {
+	case RoleMember:
+		required = 1
+	case RoleOfficer:
+		required = 2
+	case RoleAdmin:
+		required = 3
+	default:
+		return false
+	}
+
+	return viewer.AccessLevel >= required
 }

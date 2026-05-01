@@ -32,6 +32,9 @@ func main() {
 	if err := db.InitRegistrationIndexes(); err != nil {
 		log.Fatalf("Failed to initialize registration indexes: %v", err)
 	}
+	if err := db.InitEventIndexes(); err != nil {
+		log.Fatalf("Failed to initialize event indexes: %v", err)
+	}
 	defer func() {
 		if err := db.Disconnect(); err != nil {
 			log.Printf("Error disconnecting MongoDB: %v", err)
@@ -73,14 +76,20 @@ func main() {
 		stores,
 	)
 
-	eventHandler := handlers.NewEventHandler(stores)
-
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		consumer.Run(ctx)
 	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		startPublisher(ctx, stores)
+	}()
+
+	eventHandler := handlers.NewEventHandler(stores)
 
 	r := gin.Default()
 

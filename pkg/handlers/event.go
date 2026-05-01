@@ -40,23 +40,25 @@ const (
 )
 
 type EventResponse struct {
-	ID                 string                    `json:"id"`
-	Name               string                    `json:"name"`
-	Date               string                    `json:"date"`
-	EndDate            string                    `json:"end_date,omitempty"`
-	Time               string                    `json:"time"`
-	Location           string                    `json:"location"`
-	Description        string                    `json:"description"`
-	Admins             []string                  `json:"admins"`
-	RegistrationForm   []models.FormQuestion     `json:"registration_form"`
-	MaxAttendees       int                       `json:"max_attendees"`
-	CreatedAt          string                    `json:"created_at"`
-	Status             string                    `json:"status"`
-	Visibility         string                    `json:"visibility"`
-	MinimumVisibleRole string                    `json:"minimum_visible_role,omitempty"`
-	WaitlistEnabled    bool                      `json:"waitlist_enabled"`
-	WaitlistSize       int                       `json:"waitlist_size,omitempty"`
-	RegistrationStatus *EventRegistrationStatus  `json:"registration_status,omitempty"`
+	ID                 string                   `json:"id"`
+	Name               string                   `json:"name"`
+	Date               string                   `json:"date"`
+	EndDate            string                   `json:"end_date,omitempty"`
+	Time               string                   `json:"time"`
+	Location           string                   `json:"location"`
+	Description        string                   `json:"description"`
+	Admins             []string                 `json:"admins"`
+	RegistrationForm   []models.FormQuestion    `json:"registration_form"`
+	MaxAttendees       int                      `json:"max_attendees"`
+	CreatedAt          string                   `json:"created_at"`
+	Status             string                   `json:"status"`
+	Visibility         string                   `json:"visibility"`
+	MinimumVisibleRole string                   `json:"minimum_visible_role,omitempty"`
+	WaitlistEnabled    bool                     `json:"waitlist_enabled"`
+	WaitlistSize       int                      `json:"waitlist_size,omitempty"`
+	PublishDate        *time.Time               `json:"publish_date,omitempty"`
+	PublishedAt        *time.Time               `json:"published_at,omitempty"`
+	RegistrationStatus *EventRegistrationStatus `json:"registration_status,omitempty"`
 }
 
 func writeEventEditForbidden(c *gin.Context, ev *models.Event) {
@@ -69,6 +71,21 @@ func writeEventEditForbidden(c *gin.Context, ev *models.Event) {
 	c.JSON(http.StatusForbidden, gin.H{
 		"error": "you are not an admin of this event",
 	})
+}
+
+// buildViewerFromContext builds an EventViewer from auth data stored in the Gin context
+func buildViewerFromContext(c *gin.Context) models.EventViewer {
+	accessLevel := 0
+	if v, exists := c.Get("accessLevel"); exists {
+		if n, ok := v.(int); ok {
+			accessLevel = n
+		}
+	}
+
+	return models.EventViewer{
+		UserID:      strings.TrimSpace(c.GetString("userID")),
+		AccessLevel: accessLevel,
+	}
 }
 
 // GetEvents: query startDate & endDate (YYYY-MM-DD), or omit both for current UTC month; one alone is 400.
@@ -105,7 +122,9 @@ func (h *EventHandler) GetEvents(c *gin.Context) {
 		return
 	}
 
-	events, err := h.stores.Mongo.GetEvents(c.Request.Context(), startDate, endDate)
+	viewer := buildViewerFromContext(c)
+
+	events, err := h.stores.Mongo.GetVisibleEvents(c.Request.Context(), viewer, startDate, endDate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to fetch events",
@@ -144,8 +163,9 @@ func (h *EventHandler) GetEvents(c *gin.Context) {
 // returns a single event by ID
 func (h *EventHandler) GetEventByID(c *gin.Context) {
 	id := c.Param("id")
+	viewer := buildViewerFromContext(c)
 
-	event, err := h.stores.Mongo.GetEventByID(c.Request.Context(), id)
+	event, err := h.stores.Mongo.GetVisibleEventByID(c.Request.Context(), viewer, id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -192,7 +212,7 @@ func (h *EventHandler) GetEventAttendanceSummary(c *gin.Context) {
 		return
 	}
 
-	_, err := h.stores.Mongo.GetEventByID(c.Request.Context(), eventID)
+	event, err := h.stores.Mongo.GetEventByID(c.Request.Context(), eventID)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -206,6 +226,13 @@ func (h *EventHandler) GetEventAttendanceSummary(c *gin.Context) {
 		return
 	}
 
+	userID := c.GetString("userID")
+	userRole := c.GetString("userRole")
+	if !event.CanEdit(userID, userRole) {
+		writeEventEditForbidden(c, event)
+		return
+	}
+
 	attendeeCount, err := h.stores.Mongo.CountAcceptedRegistrationsForEvent(c.Request.Context(), eventID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -215,7 +242,7 @@ func (h *EventHandler) GetEventAttendanceSummary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"event_id":        eventID,
+		"event_id":       eventID,
 		"attendee_count": attendeeCount,
 	})
 }
@@ -233,6 +260,7 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 	}
 
 	event.ApplyDefaults()
+	event.SyncPublicationState(time.Now().UTC())
 
 	creatorID := strings.TrimSpace(c.GetString("userID"))
 	if creatorID == "" {
@@ -310,7 +338,7 @@ func (h *EventHandler) DeleteEventByID(c *gin.Context) {
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
-	existingEvent, err := db.GetEventByID(id)
+	existingEvent, err := h.stores.Mongo.GetEventByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -323,7 +351,7 @@ func (h *EventHandler) DeleteEventByID(c *gin.Context) {
 		return
 	}
 
-	err = db.DeleteEventByID(id)
+	err = h.stores.Mongo.DeleteEventByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -383,7 +411,7 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
-	existingEvent, err := db.GetEventByID(id)
+	existingEvent, err := h.stores.Mongo.GetEventByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -423,6 +451,8 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 		return
 	}
 
+	updatedEvent.SyncPublicationState(time.Now().UTC())
+
 	// Validate the merged event state after applying PATCH fields
 	if err := updatedEvent.Validate(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -444,7 +474,20 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 		fields["admins"] = sanitizeAdmins(updatedEvent.Admins)
 	}
 
-	err = db.UpdateEventByID(id, fields)
+	if _, ok := fields["status"]; ok && updatedEvent.Status == models.StatusPublished {
+		fields["publish_date"] = updatedEvent.PublishDate
+		fields["published_at"] = updatedEvent.PublishedAt
+	}
+
+	if _, ok := fields["publish_date"]; ok {
+		fields["publish_date"] = updatedEvent.PublishDate
+		if updatedEvent.Status == models.StatusPublished {
+			fields["status"] = updatedEvent.Status
+			fields["published_at"] = updatedEvent.PublishedAt
+		}
+	}
+
+	err = h.stores.Mongo.UpdateEventByID(c.Request.Context(), id, fields)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -472,7 +515,6 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 	})
 }
 
-// RegisterForEvent writes a pending registration to MongoDB, publishes a reference message to Kafka, and returns 202 Accepted.
 func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		eventID := c.Param("id")
@@ -498,7 +540,7 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			return
 		}
 
-		alreadyRegistered, err := db.HasPendingOrAcceptedRegistration(eventID, payload.Registrant.UserID)
+		alreadyRegistered, err := h.stores.Mongo.HasPendingOrAcceptedRegistration(c.Request.Context(), eventID, payload.Registrant.UserID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "failed to verify existing registration",
@@ -512,7 +554,7 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			return
 		}
 
-		ev, err := db.GetEventByID(eventID)
+		ev, err := h.stores.Mongo.GetEventByID(c.Request.Context(), eventID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "event not found",
@@ -527,7 +569,7 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			return
 		}
 
-		if ev.IsAdmin(payload.Registrant.UserID) {
+		if ev.IsListedAdmin(payload.Registrant.UserID) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error": "event admins cannot register for their own event",
 			})
@@ -564,7 +606,7 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			Answers:    payload.RegistrationFormAnswers,
 		}
 
-		created, err := db.CreatePendingRegistration(req)
+		created, err := h.stores.Mongo.CreatePendingRegistration(c.Request.Context(), req)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "failed to create registration request",
@@ -572,25 +614,37 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			return
 		}
 
-		seatTaken, err := h.stores.Redis.TryTakeEventSeat(c.Request.Context(), eventID)
-		if err != nil {
-			_ = db.MarkRegistrationRejected(created.RequestID, models.ReasonInternalError)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "failed to reserve event seat",
-			})
-			return
-		}
-		if !seatTaken {
-			_ = db.MarkRegistrationRejected(created.RequestID, models.ReasonCapacityFull)
-			c.JSON(http.StatusConflict, gin.H{
-				"error": "event is full",
-			})
-			return
+		// Capacity handling:
+		// Events with max_attendees == -1 are treated as unlimited and are NOT tracked in Redis
+		// Therefore, skip Redis seat reservation entirely for unlimited events
+		// For limited events, use Redis to atomically reserve a seat to avoid race conditions
+		// under concurrent registrations
+		seatTaken := true
+		if ev.MaxAttendees != -1 {
+			seatTaken, err = h.stores.Redis.TryTakeEventSeat(c.Request.Context(), eventID)
+			if err != nil {
+				_ = h.stores.Mongo.MarkRegistrationRejected(c.Request.Context(), created.RequestID, models.ReasonInternalError)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": "failed to reserve event seat",
+				})
+				return
+			}
+			if !seatTaken {
+				_ = h.stores.Mongo.MarkRegistrationRejected(c.Request.Context(), created.RequestID, models.ReasonCapacityFull)
+				c.JSON(http.StatusConflict, gin.H{
+					"error": "event is full",
+				})
+				return
+			}
 		}
 
-		if err := db.MarkRegistrationAccepted(created.RequestID); err != nil {
-			_ = h.stores.Redis.ReleaseEventSeat(c.Request.Context(), eventID)
-			_ = db.MarkRegistrationRejected(created.RequestID, models.ReasonInternalError)
+		if err := h.stores.Mongo.MarkRegistrationAccepted(c.Request.Context(), created.RequestID); err != nil {
+			// Only release a Redis seat if this event is capacity-limited
+			// Unlimited events do not have a Redis headcount entry
+			if ev.MaxAttendees != -1 && seatTaken {
+				_ = h.stores.Redis.ReleaseEventSeat(c.Request.Context(), eventID)
+			}
+			_ = h.stores.Mongo.MarkRegistrationRejected(c.Request.Context(), created.RequestID, models.ReasonInternalError)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "failed to send registration request",
 			})
@@ -622,7 +676,7 @@ func (h *EventHandler) JoinEventWaitlist(c *gin.Context) {
 		return
 	}
 
-	ev, err := db.GetEventByID(eventID)
+	ev, err := h.stores.Mongo.GetEventByID(c.Request.Context(), eventID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
@@ -644,7 +698,7 @@ func (h *EventHandler) JoinEventWaitlist(c *gin.Context) {
 		return
 	}
 
-	alreadyRegistered, err := db.HasAcceptedRegistration(eventID, userID)
+	alreadyRegistered, err := h.stores.Mongo.HasAcceptedRegistration(c.Request.Context(), eventID, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to verify existing registration",
@@ -658,7 +712,7 @@ func (h *EventHandler) JoinEventWaitlist(c *gin.Context) {
 		return
 	}
 
-	alreadyWaitlisted, err := db.HasWaitlistEntry(eventID, userID)
+	alreadyWaitlisted, err := h.stores.Mongo.HasWaitlistEntry(c.Request.Context(), eventID, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to verify existing waitlist entry",
@@ -672,7 +726,7 @@ func (h *EventHandler) JoinEventWaitlist(c *gin.Context) {
 		return
 	}
 
-	count, err := db.CountWaitlistEntries(eventID)
+	count, err := h.stores.Mongo.CountWaitlistEntries(c.Request.Context(), eventID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to count waitlist entries",
@@ -692,7 +746,7 @@ func (h *EventHandler) JoinEventWaitlist(c *gin.Context) {
 		UserID:  userID,
 	}
 
-	if err := db.CreateWaitlistEntry(entry); err != nil {
+	if err := h.stores.Mongo.CreateWaitlistEntry(c.Request.Context(), entry); err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			c.JSON(http.StatusConflict, gin.H{
 				"error": "user is already on the waitlist for this event",
@@ -729,7 +783,7 @@ func (h *EventHandler) GetRegistrationStatus(c *gin.Context) {
 		return
 	}
 
-	req, err := db.GetRegistrationByID(requestID)
+	req, err := h.stores.Mongo.GetRegistrationByID(c.Request.Context(), requestID)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -780,6 +834,8 @@ func buildEventResponse(event models.Event, registrationStatus *EventRegistratio
 		MinimumVisibleRole: event.MinimumVisibleRole,
 		WaitlistEnabled:    event.WaitlistEnabled,
 		WaitlistSize:       event.WaitlistSize,
+		PublishDate:        event.PublishDate,
+		PublishedAt:        event.PublishedAt,
 		RegistrationStatus: registrationStatus,
 	}
 }
@@ -841,15 +897,12 @@ func buildEventResponses(
 	return responses
 }
 
-func (h *EventHandler) loadEventAndAuthorizeAdmin(ctx context.Context, eventID, userID string) bool {
+func (h *EventHandler) loadEventAndAuthorizeAdmin(ctx context.Context, eventID, userID, userRole string) bool {
 	ev, err := h.stores.Mongo.GetEventByID(ctx, eventID)
 	if err != nil {
 		return false
 	}
-	if !ev.IsAdmin(userID) {
-		return false
-	}
-	return true
+	return ev.CanEdit(userID, userRole)
 }
 
 func parsePagination(c *gin.Context) (int64, int64, bool) {
@@ -889,13 +942,14 @@ func (h *EventHandler) ListEventRegistrations(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
 		return
 	}
+	userRole := strings.TrimSpace(c.GetString("userRole"))
 
 	limit, offset, ok := parsePagination(c)
 	if !ok {
 		return
 	}
 
-	if !h.loadEventAndAuthorizeAdmin(c.Request.Context(), eventID, userID) {
+	if !h.loadEventAndAuthorizeAdmin(c.Request.Context(), eventID, userID, userRole) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you are not an admin of this event"})
 		return
 	}
@@ -942,8 +996,9 @@ func (h *EventHandler) GetEventRegistrationByRequestID(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
 		return
 	}
+	userRole := strings.TrimSpace(c.GetString("userRole"))
 
-	if !h.loadEventAndAuthorizeAdmin(c.Request.Context(), eventID, userID) {
+	if !h.loadEventAndAuthorizeAdmin(c.Request.Context(), eventID, userID, userRole) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you are not an admin of this event"})
 		return
 	}

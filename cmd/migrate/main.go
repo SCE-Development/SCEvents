@@ -12,8 +12,6 @@ import (
 	"github.com/SCE-Development/SCEvents/pkg/models"
 )
 
-
-
 func main() {
 	if len(os.Args) < 2 || strings.TrimSpace(os.Args[1]) == "" {
 		log.Print("Please specify a collection")
