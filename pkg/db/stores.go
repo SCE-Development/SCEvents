@@ -48,6 +48,7 @@ type MongoStore interface {
 	CountWaitlistEntries(ctx context.Context, eventID string) (int64, error)
 	CreateWaitlistEntry(ctx context.Context, entry models.WaitlistEntry) error
 	GetWaitlistedEventIDsForUser(ctx context.Context, userID string, eventIDs []string) (map[string]bool, error)
+	ListAcceptedRegistrationsForEvent(ctx context.Context, eventID string) ([]models.RegistrationRequest, error)
 }
 
 type Stores struct {

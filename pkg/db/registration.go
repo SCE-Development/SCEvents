@@ -454,3 +454,30 @@ func (s *mongoStore) GetRegistrationStatusesForUser(ctx context.Context, userID 
 
 	return result, nil
 }
+
+// returns all accepted registrations for a given event.
+func (s *mongoStore) ListAcceptedRegistrationsForEvent(ctx context.Context, eventID string) ([]models.RegistrationRequest, error) {
+	filter := bson.M{
+		"event_id": eventID,
+		"status":   models.StatusAccepted,
+	}
+
+	opts := options.Find().SetSort(bson.D{
+		{Key: "created_at", Value: 1},
+	})
+
+	cursor, err := s.registrations.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = cursor.Close(ctx)
+	}()
+
+	registrations := make([]models.RegistrationRequest, 0)
+	if err := cursor.All(ctx, &registrations); err != nil {
+		return nil, err
+	}
+
+	return registrations, nil
+}

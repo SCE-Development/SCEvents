@@ -114,3 +114,6 @@ func (m *MockMongoStore) GetWaitlistedEventIDsForUser(_ context.Context, _ strin
 func (m *MockMongoStore) PublishDueEvents(_ context.Context, _ time.Time) (int64, error) {
 	return m.PublishedDueCount, m.PublishDueEventsErr
 }
+func (m *MockMongoStore) ListAcceptedRegistrationsForEvent(_ context.Context, _ string) ([]models.RegistrationRequest, error) {
+	return m.Registrations, m.RegistrationsErr
+}
