@@ -129,7 +129,7 @@ func TestGetEventAttendanceSummary(t *testing.T) {
 		}
 	})
 
-	t.Run("returns forbidden for non-admin", func(t *testing.T) {
+	t.Run("returns attendee count for non-admin", func(t *testing.T) {
 		mongoStore := &mocks.MockMongoStore{
 			Event:         &models.Event{ID: "event-1", Admins: []string{"user-2"}},
 			AttendeeCount: 1,
@@ -140,11 +140,11 @@ func TestGetEventAttendanceSummary(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusForbidden {
-			t.Fatalf("expected status 403, got %d", w.Code)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
 		}
-		if mongoStore.CountCalled {
-			t.Fatal("expected attendee count query not to be called")
+		if !mongoStore.CountCalled {
+			t.Fatal("expected attendee count query to be called")
 		}
 	})
 }

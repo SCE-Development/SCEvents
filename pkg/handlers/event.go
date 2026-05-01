@@ -212,7 +212,7 @@ func (h *EventHandler) GetEventAttendanceSummary(c *gin.Context) {
 		return
 	}
 
-	event, err := h.stores.Mongo.GetEventByID(c.Request.Context(), eventID)
+	_, err := h.stores.Mongo.GetEventByID(c.Request.Context(), eventID)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -223,13 +223,6 @@ func (h *EventHandler) GetEventAttendanceSummary(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to fetch event",
 		})
-		return
-	}
-
-	userID := c.GetString("userID")
-	userRole := c.GetString("userRole")
-	if !event.CanEdit(userID, userRole) {
-		writeEventEditForbidden(c, event)
 		return
 	}
 
