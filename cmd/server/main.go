@@ -121,6 +121,7 @@ func main() {
 			protected.GET("/:id/registrations/:request_id", eventHandler.GetEventRegistrationByRequestID)
 			protected.POST("/:id/register", eventHandler.RegisterForEvent(producer))
 			protected.POST("/:id/waitlist", eventHandler.JoinEventWaitlist)
+			protected.GET("/:id/attendees", eventHandler.GetEventAttendees)
 		}
 
 		officerProtected := events.Group("/")
