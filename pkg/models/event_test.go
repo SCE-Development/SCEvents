@@ -55,6 +55,7 @@ func TestValidate(t *testing.T) {
 				Status:       StatusPublished,
 				Visibility:   VisibilityPublic,
 				MaxAttendees: 50,
+				Admins:       []string{"admin-1"},
 			},
 			wantErr: false,
 		},
@@ -120,6 +121,7 @@ func TestEvent_Validate_MaxAttendees(t *testing.T) {
 			Location:   "Room 101",
 			Status:     StatusDraft,
 			Visibility: VisibilityPublic,
+			Admins:     []string{"admin-1"},
 		}
 	}
 
@@ -295,6 +297,7 @@ func TestValidate_EndDate(t *testing.T) {
 			Status:       StatusDraft,
 			Visibility:   VisibilityPublic,
 			MaxAttendees: 10,
+			Admins:       []string{"admin-1"},
 		}
 	}
 
@@ -422,13 +425,6 @@ func TestApplyPatch_AdminsRejectsInvalidValues(t *testing.T) {
 				"admins": "admin-1",
 			},
 			wantErr: "admins must be an array",
-		},
-		{
-			name: "empty array",
-			fields: map[string]interface{}{
-				"admins": []interface{}{},
-			},
-			wantErr: "admins must include at least one user",
 		},
 		{
 			name: "blank admin",
@@ -720,6 +716,7 @@ func TestValidate_PublishDateRules(t *testing.T) {
 			Status:       StatusClosed,
 			Visibility:   VisibilityPublic,
 			MaxAttendees: 10,
+			Admins:       []string{"admin-1"},
 			PublishDate:  &now,
 		}
 
@@ -738,6 +735,7 @@ func TestValidate_PublishDateRules(t *testing.T) {
 			Status:       StatusDraft,
 			Visibility:   VisibilityPublic,
 			MaxAttendees: 10,
+			Admins:       []string{"admin-1"},
 			PublishDate:  &now,
 		}
 

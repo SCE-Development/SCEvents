@@ -762,3 +762,140 @@ func TestGetEventByID_IncludesPublishFields(t *testing.T) {
 		t.Fatal("expected published_at in response")
 	}
 }
+
+func TestDeleteEventByID_RequiresDraftOrClosed(t *testing.T) {
+	t.Run("conflict when published", func(t *testing.T) {
+		mongoStore := &mocks.MockMongoStore{
+			Event: &models.Event{
+				ID:           "event-1",
+				Status:       models.StatusPublished,
+				Admins:       []string{"user-1"},
+				MaxAttendees: -1,
+			},
+		}
+		redis := &mocks.MockRedisStore{}
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		handler := NewEventHandler(&db.Stores{Mongo: mongoStore, Redis: redis})
+		router.Use(func(c *gin.Context) {
+			c.Set("userID", "user-1")
+			c.Set("userRole", models.RoleOfficer)
+			c.Set("accessLevel", 2)
+			c.Next()
+		})
+		router.DELETE("/events/:id", handler.DeleteEventByID)
+
+		req := httptest.NewRequest(http.MethodDelete, "/events/event-1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusConflict {
+			t.Fatalf("expected status 409, got %d: %s", w.Code, w.Body.String())
+		}
+		if mongoStore.DeletedEventID != "" {
+			t.Fatal("expected mongo delete not to be called")
+		}
+	})
+
+	t.Run("ok when draft", func(t *testing.T) {
+		mongoStore := &mocks.MockMongoStore{
+			Event: &models.Event{
+				ID:           "event-1",
+				Status:       models.StatusDraft,
+				Admins:       []string{"user-1"},
+				MaxAttendees: 10,
+			},
+		}
+		redis := &mocks.MockRedisStore{}
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		handler := NewEventHandler(&db.Stores{Mongo: mongoStore, Redis: redis})
+		router.Use(func(c *gin.Context) {
+			c.Set("userID", "user-1")
+			c.Set("userRole", models.RoleOfficer)
+			c.Set("accessLevel", 2)
+			c.Next()
+		})
+		router.DELETE("/events/:id", handler.DeleteEventByID)
+
+		req := httptest.NewRequest(http.MethodDelete, "/events/event-1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+		if mongoStore.DeletedEventID != "event-1" {
+			t.Fatalf("expected delete for event-1, got %q", mongoStore.DeletedEventID)
+		}
+		if !redis.DeleteCalled {
+			t.Fatal("expected redis DeleteEventHeadcount for capped event")
+		}
+	})
+
+	t.Run("redis not called when unlimited", func(t *testing.T) {
+		mongoStore := &mocks.MockMongoStore{
+			Event: &models.Event{
+				ID:           "event-1",
+				Status:       models.StatusClosed,
+				Admins:       []string{"user-1"},
+				MaxAttendees: -1,
+			},
+		}
+		redis := &mocks.MockRedisStore{}
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		handler := NewEventHandler(&db.Stores{Mongo: mongoStore, Redis: redis})
+		router.Use(func(c *gin.Context) {
+			c.Set("userID", "user-1")
+			c.Set("userRole", models.RoleOfficer)
+			c.Set("accessLevel", 2)
+			c.Next()
+		})
+		router.DELETE("/events/:id", handler.DeleteEventByID)
+
+		req := httptest.NewRequest(http.MethodDelete, "/events/event-1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+		if redis.DeleteCalled {
+			t.Fatal("did not expect redis delete for unlimited event")
+		}
+	})
+
+	t.Run("forbidden when not event admin", func(t *testing.T) {
+		mongoStore := &mocks.MockMongoStore{
+			Event: &models.Event{
+				ID:           "event-1",
+				Status:       models.StatusDraft,
+				Admins:       []string{"user-1"},
+				MaxAttendees: -1,
+			},
+		}
+		redis := &mocks.MockRedisStore{}
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		handler := NewEventHandler(&db.Stores{Mongo: mongoStore, Redis: redis})
+		router.Use(func(c *gin.Context) {
+			c.Set("userID", "user-2")
+			c.Set("userRole", models.RoleOfficer)
+			c.Set("accessLevel", 2)
+			c.Next()
+		})
+		router.DELETE("/events/:id", handler.DeleteEventByID)
+
+		req := httptest.NewRequest(http.MethodDelete, "/events/event-1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("expected status 403, got %d: %s", w.Code, w.Body.String())
+		}
+		if mongoStore.DeletedEventID != "" {
+			t.Fatal("expected mongo delete not to be called")
+		}
+	})
+}

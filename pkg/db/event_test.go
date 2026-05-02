@@ -128,6 +128,25 @@ func TestDeleteEventByID(t *testing.T) {
 			t.Fatalf("expected ErrNoDocuments, got %v", err)
 		}
 	})
+
+	mt.Run("cascade waitlist registrations then event", func(mt *mtest.T) {
+		db := mt.Coll.Database()
+		eventsCol := db.Collection("events")
+		regsCol := db.Collection("registrations")
+		waitCol := db.Collection("waitlists")
+		store := NewMongoStore(eventsCol, regsCol, waitCol)
+
+		mt.AddMockResponses(
+			bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: int32(0)}},
+			bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: int32(2)}},
+			bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: int32(1)}},
+		)
+
+		err := store.DeleteEventByID(context.Background(), "event-1")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
 }
 
 func TestUpdateEventByID(t *testing.T) {
