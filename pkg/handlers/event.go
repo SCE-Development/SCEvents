@@ -442,12 +442,25 @@ func (h *EventHandler) DeleteEventByID(c *gin.Context) {
 		return
 	}
 
+	if existingEvent.Status != models.StatusDraft && existingEvent.Status != models.StatusClosed {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "only draft or closed events can be deleted; close the event first",
+		})
+		return
+	}
+
 	err = h.stores.Mongo.DeleteEventByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "event not found",
 		})
 		return
+	}
+
+	if h.stores.Redis != nil && existingEvent.MaxAttendees != -1 {
+		if err := h.stores.Redis.DeleteEventHeadcount(c.Request.Context(), id); err != nil {
+			log.Printf("delete event: redis headcount cleanup failed for %s: %v", id, err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -543,6 +556,11 @@ func (h *EventHandler) UpdateEventByID(c *gin.Context) {
 	}
 
 	updatedEvent.SyncPublicationState(time.Now().UTC())
+
+	if updatedEvent.Status == models.StatusClosed {
+		updatedEvent.PublishDate = nil
+		fields["publish_date"] = nil
+	}
 
 	// Validate the merged event state after applying PATCH fields
 	if err := updatedEvent.Validate(); err != nil {

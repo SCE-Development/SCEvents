@@ -152,6 +152,16 @@ func (s *mongoStore) CreateEvent(ctx context.Context, e models.Event) (*models.E
 
 // deletes an event by ID
 func (s *mongoStore) DeleteEventByID(ctx context.Context, id string) error {
+	if s.waitlists != nil {
+		if _, err := s.waitlists.DeleteMany(ctx, bson.M{"event_id": id}); err != nil {
+			return err
+		}
+	}
+	if s.registrations != nil {
+		if _, err := s.registrations.DeleteMany(ctx, bson.M{"event_id": id}); err != nil {
+			return err
+		}
+	}
 	result, err := s.events.DeleteOne(ctx, bson.M{"_id": id})
 	if err != nil {
 		return err

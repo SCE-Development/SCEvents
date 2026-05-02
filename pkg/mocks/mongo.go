@@ -32,7 +32,9 @@ type MockMongoStore struct {
 	EventsErr                  error
 	CreatedEvent               *models.Event
 	PublishedDueCount          int64
-    PublishDueEventsErr        error
+	PublishDueEventsErr        error
+	DeleteEventByIDErr         error
+	DeletedEventID             string
 }
 
 func (m *MockMongoStore) GetVisibleEvents(_ context.Context, _ models.EventViewer, _, _ string) ([]models.Event, error) {
@@ -51,7 +53,11 @@ func (m *MockMongoStore) CreateEvent(_ context.Context, e models.Event) (*models
 	m.CreatedEvent = &e
 	return &e, nil
 }
-func (m *MockMongoStore) DeleteEventByID(_ context.Context, _ string) error {
+func (m *MockMongoStore) DeleteEventByID(_ context.Context, id string) error {
+	if m.DeleteEventByIDErr != nil {
+		return m.DeleteEventByIDErr
+	}
+	m.DeletedEventID = id
 	return nil
 }
 func (m *MockMongoStore) UpdateEventByID(_ context.Context, _ string, _ map[string]interface{}) error {
