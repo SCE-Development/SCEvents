@@ -1,0 +1,33 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Compose can be slow on runners (Kafka + topic init + server build)
+      INTEGRATION_READY_TIMEOUT: 120s
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # make integration = docker compose up + go test -tags=integration (see testing/Makefile)
+      - name: Run integration tests
+        run: make integration
+
+      - name: Tear down Compose
+        if: always()
+        run: make teardown-integration
