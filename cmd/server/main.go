@@ -119,6 +119,7 @@ func main() {
 			protected.GET("/:id/attendance", eventHandler.GetEventAttendanceSummary)
 			protected.GET("/:id/registrations", eventHandler.ListEventRegistrations)
 			protected.GET("/:id/registrations/:request_id", eventHandler.GetEventRegistrationByRequestID)
+			protected.GET("/:id/registration/me", eventHandler.GetMyRegistrationState)
 			protected.POST("/:id/register", eventHandler.RegisterForEvent(producer))
 			protected.POST("/:id/waitlist", eventHandler.JoinEventWaitlist)
 			protected.GET("/:id/attendees", eventHandler.GetEventAttendees)

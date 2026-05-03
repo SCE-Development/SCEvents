@@ -1124,3 +1124,35 @@ func (h *EventHandler) GetEventRegistrationByRequestID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, registrationReq)
 }
+
+func (h *EventHandler) GetMyRegistrationState(c *gin.Context) {
+	eventID := strings.TrimSpace(c.Param("id"))
+	if eventID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "event id is required"})
+		return
+	}
+
+	userID := strings.TrimSpace(c.GetString("userID"))
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
+		return
+	}
+
+	eventIDs := []string{eventID}
+	registrationStatuses, err := h.stores.Mongo.GetRegistrationStatusesForUser(c.Request.Context(), userID, eventIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch registration status"})
+		return
+	}
+
+	waitlistedEventIDs, err := h.stores.Mongo.GetWaitlistedEventIDsForUser(c.Request.Context(), userID, eventIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch waitlist status"})
+		return
+	}
+
+	status := resolveEventRegistrationStatus(eventID, registrationStatuses, waitlistedEventIDs)
+	c.JSON(http.StatusOK, gin.H{
+		"registration_status": status,
+	})
+}
