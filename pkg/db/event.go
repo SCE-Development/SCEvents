@@ -52,15 +52,15 @@ func buildVisibilityFilter(viewer models.EventViewer) bson.M {
 		conditions = append(conditions, bson.M{"admins": viewer.UserID})
 	}
 
-	// Published public events are visible to everyone.
+	// Published or closed public events are visible to everyone.
 	conditions = append(conditions, bson.M{
 		"$and": bson.A{
-			bson.M{"status": models.StatusPublished},
+			bson.M{"status": bson.M{"$in": bson.A{models.StatusPublished, models.StatusClosed}}},
 			bson.M{"visibility": models.VisibilityPublic},
 		},
 	})
 
-	// Published private events require the viewer to meet minimum_visible_role.
+	// Published or closed private events require the viewer to meet minimum_visible_role.
 	privateRoleConditions := bson.A{}
 	if viewer.AccessLevel >= 1 {
 		privateRoleConditions = append(privateRoleConditions, bson.M{"minimum_visible_role": models.RoleMember})
@@ -72,7 +72,7 @@ func buildVisibilityFilter(viewer models.EventViewer) bson.M {
 	if len(privateRoleConditions) > 0 {
 		conditions = append(conditions, bson.M{
 			"$and": bson.A{
-				bson.M{"status": models.StatusPublished},
+				bson.M{"status": bson.M{"$in": bson.A{models.StatusPublished, models.StatusClosed}}},
 				bson.M{"visibility": models.VisibilityPrivate},
 				bson.M{"$or": privateRoleConditions},
 			},
