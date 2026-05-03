@@ -26,14 +26,8 @@ func main() {
 	if err := db.Connect(cfg.MongoURI); err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
-	if err := db.InitWaitlistIndexes(); err != nil {
-		log.Fatalf("Failed to initialize waitlist indexes: %v", err)
-	}
-	if err := db.InitRegistrationIndexes(); err != nil {
-		log.Fatalf("Failed to initialize registration indexes: %v", err)
-	}
-	if err := db.InitEventIndexes(); err != nil {
-		log.Fatalf("Failed to initialize event indexes: %v", err)
+	if err := db.InitMongoIndexes(); err != nil {
+		log.Fatalf("Failed to initialize MongoDB indexes: %v", err)
 	}
 	defer func() {
 		if err := db.Disconnect(); err != nil {
