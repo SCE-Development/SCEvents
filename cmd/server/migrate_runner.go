@@ -10,25 +10,25 @@ import (
 	"github.com/SCE-Development/SCEvents/pkg/models"
 )
 
-func runAutoMigrations(ctx context.Context, interval time.Duration) {
-	runOnce := func() {
-		for key, entry := range models.MigrationRegistry {
-			coll := db.Database().Collection(entry.Collection)
+func runMigrationCycle(ctx context.Context) {
+	for key, entry := range models.MigrationRegistry {
+		coll := db.Database().Collection(entry.Collection)
 
-			updated, err := database.AutoMigrateDefaults(ctx, coll, entry.Model)
-			if err != nil {
-				log.Printf("auto-migrate failed for %s (%s): %v", key, entry.Collection, err)
-				continue
-			}
+		updated, err := database.AutoMigrateDefaults(ctx, coll, entry.Model)
+		if err != nil {
+			log.Printf("auto-migrate failed for %s (%s): %v", key, entry.Collection, err)
+			continue
+		}
 
-			if updated > 0 {
-				log.Printf("auto-migrate updated %d fields for %s (%s)", updated, key, entry.Collection)
-			}
+		if updated > 0 {
+			log.Printf("auto-migrate updated %d fields for %s (%s)", updated, key, entry.Collection)
 		}
 	}
+}
 
+func runAutoMigrations(ctx context.Context, interval time.Duration) {
 	// run once at startup
-	runOnce()
+	runMigrationCycle(ctx)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -39,7 +39,7 @@ func runAutoMigrations(ctx context.Context, interval time.Duration) {
 			log.Print("auto-migrate runner stopped")
 			return
 		case <-ticker.C:
-			runOnce()
+			runMigrationCycle(ctx)
 		}
 	}
 }

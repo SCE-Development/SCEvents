@@ -48,6 +48,8 @@ services:
       - SERVER_PORT=${SERVER_PORT:-8002}
       - CLIENT_URL=${CLIENT_URL:-http://localhost:3000}
       - CLIENT_API_URL=${CLIENT_API_URL:-http://host.docker.internal:8080}
+      - AUTO_MIGRATE_ENABLED=${AUTO_MIGRATE_ENABLED:-true}
+      - AUTO_MIGRATE_INTERVAL_HOURS=${AUTO_MIGRATE_INTERVAL_HOURS:-24}
     volumes:
       - .:/app
       - go-mod-cache:/go/pkg/mod
