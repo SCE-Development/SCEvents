@@ -7,8 +7,32 @@ on:
     branches: [ "main", "master" ]
 
 jobs:
+  detect-lint-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Detect lint-impacting changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            should_run:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - '.github/workflows/lint.yml'
+              - '.golangci.yml'
+              - '.golangci.yaml'
+              - '.golangci.toml'
+              - '.golangci.json'
+
   lint:
     name: lint-code
+    needs: detect-lint-changes
+    if: ${{ needs.detect-lint-changes.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,3 +48,32 @@ jobs:
         with:
           version: v2.11.4
           args: --timeout=5m
+
+  lint-skipped:
+    needs: detect-lint-changes
+    if: ${{ needs.detect-lint-changes.outputs.should_run != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lint skipped by path filter
+        run: echo "No lint-impacting files changed. Skipping golangci-lint."
+
+  lint-pipeline-status:
+    needs: [detect-lint-changes, lint, lint-skipped]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check lint outcome
+        run: |
+          if [[ "${{ needs.detect-lint-changes.outputs.should_run }}" == "true" ]]; then
+            if [[ "${{ needs.lint.result }}" != "success" ]]; then
+              echo "Lint was required and did not pass."
+              exit 1
+            fi
+            echo "Lint passed."
+          else
+            if [[ "${{ needs.lint-skipped.result }}" != "success" ]]; then
+              echo "Lint skip marker job failed."
+              exit 1
+            fi
+            echo "Lint intentionally skipped."
+          fi
