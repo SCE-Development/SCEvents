@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/SCE-Development/SCEvents/pkg/database"
 	"github.com/SCE-Development/SCEvents/pkg/db"
+	"github.com/SCE-Development/SCEvents/pkg/migration"
 	"github.com/SCE-Development/SCEvents/pkg/models"
 )
 
@@ -14,7 +14,7 @@ func runMigrationCycle(ctx context.Context) {
 	for key, entry := range models.MigrationRegistry {
 		coll := db.Database().Collection(entry.Collection)
 
-		updated, err := database.AutoMigrateDefaults(ctx, coll, entry.Model)
+		updated, err := migration.AutoMigrateDefaults(ctx, coll, entry.Model)
 		if err != nil {
 			log.Printf("auto-migrate failed for %s (%s): %v", key, entry.Collection, err)
 			continue
