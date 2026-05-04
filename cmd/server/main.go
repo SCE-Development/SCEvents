@@ -13,7 +13,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-	"github.com/SCE-Development/SCEvents/internal/config"
+	"github.com/SCE-Development/SCEvents/pkg/config"
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	"github.com/SCE-Development/SCEvents/pkg/handlers"
 	"github.com/SCE-Development/SCEvents/pkg/middleware"
