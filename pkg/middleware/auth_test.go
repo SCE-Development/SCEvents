@@ -257,7 +257,7 @@ func TestOptionalAuth_SetsContextForValidToken(t *testing.T) {
 	}
 }
 
-func TestOptionalAuth_RejectsInvalidToken(t *testing.T) {
+func TestOptionalAuth_IgnoresInvalidToken(t *testing.T) {
 	authHeader := "Bearer invalid-token"
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -273,8 +273,20 @@ func TestOptionalAuth_RejectsInvalidToken(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expected status 401, got %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if _, ok := response["userID"]; ok && response["userID"] != nil {
+		t.Fatalf("expected no userID, got %v", response["userID"])
+	}
+	if _, ok := response["userRole"]; ok && response["userRole"] != nil {
+		t.Fatalf("expected no userRole, got %v", response["userRole"])
 	}
 }
 
