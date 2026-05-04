@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/SCE-Development/SCEvents/internal/config"
+	"github.com/SCE-Development/SCEvents/pkg/config"
 	"github.com/SCE-Development/SCEvents/pkg/db"
 	"github.com/SCE-Development/SCEvents/pkg/migration"
 	"github.com/SCE-Development/SCEvents/pkg/models"
