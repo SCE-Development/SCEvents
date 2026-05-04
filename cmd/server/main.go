@@ -83,6 +83,14 @@ func main() {
 		startPublisher(ctx, stores)
 	}()
 
+	if cfg.AutoMigrateEnabled {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runAutoMigrations(ctx, cfg.AutoMigrateInterval)
+		}()
+	}
+
 	eventHandler := handlers.NewEventHandler(stores)
 
 	r := gin.Default()
