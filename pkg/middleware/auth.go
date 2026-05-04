@@ -108,8 +108,8 @@ func OptionalAuth(clientAPIURL string) gin.HandlerFunc {
 
 		userID, role, accessLevel, err := verifyAuthHeader(authHeader, clientAPIURL)
 		if err != nil {
-			// if not success, the token was invalid or the API is down
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token verification failed"})
+			// if not success, the token was invalid or the user is pending, proceed anonymously
+			c.Next()
 			return
 		}
 
