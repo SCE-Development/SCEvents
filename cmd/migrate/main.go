@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/SCE-Development/SCEvents/internal/config"
-	"github.com/SCE-Development/SCEvents/pkg/database"
 	"github.com/SCE-Development/SCEvents/pkg/db"
+	"github.com/SCE-Development/SCEvents/pkg/migration"
 	"github.com/SCE-Development/SCEvents/pkg/models"
 )
 
@@ -41,7 +41,7 @@ func main() {
 	log.Printf("migrating collection %q...", entry.Collection)
 
 	coll := db.Database().Collection(entry.Collection)
-	updated, err := database.AutoMigrateDefaults(ctx, coll, entry.Model)
+	updated, err := migration.AutoMigrateDefaults(ctx, coll, entry.Model)
 	if err != nil {
 		log.Fatalf("Failed migrating %s: %v", entry.Collection, err)
 	}
