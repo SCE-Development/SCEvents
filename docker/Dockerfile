@@ -9,7 +9,6 @@ RUN go mod download
 
 COPY cmd/ cmd/
 COPY pkg/ pkg/
-COPY internal/ internal/
 RUN go build -o ./scevents ./cmd/server
 
 # production stage
