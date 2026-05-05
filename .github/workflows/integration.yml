@@ -49,6 +49,11 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Cache Docker images
+        uses: ScribeMD/docker-cache@0.5.0
+        with:
+          key: docker-cache-${{ runner.os }}-${{ hashFiles('docker-compose.yml', 'docker-compose.dev.yml', 'testing/integration/docker-compose.integration.yml', 'testing/integration/docker-compose.ci-cache.yml') }}
+
       # Enables type=gha BuildKit cache used in testing/integration/docker-compose.ci-cache.yml
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -59,10 +64,21 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Pull and run services
+        run: |
+          docker compose \
+            --project-directory "${{ github.workspace }}" \
+            -f docker-compose.dev.yml \
+            -f testing/integration/docker-compose.integration.yml \
+            -f testing/integration/docker-compose.ci-cache.yml \
+            up -d --build
+
       # make integration = docker compose up + go test -tags=integration (see testing/Makefile).
       # On GitHub Actions, Makefile adds docker-compose.ci-cache.yml for BuildKit GHA layer cache.
       - name: Run integration tests
-        run: make integration
+        run: |
+          cd testing/integration
+          go test -tags=integration -count=1 -parallel 8 -v ./...
 
       - name: Tear down Compose
         if: always()
