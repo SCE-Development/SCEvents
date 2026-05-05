@@ -1,0 +1,16 @@
+# CI-only: enable BuildKit GitHub Actions cache for custom images (see .github/workflows/integration.yml).
+# Loaded when CI=true (GitHub Actions sets this automatically). Safe to omit locally.
+services:
+  server:
+    build:
+      cache_from:
+        - type=gha,scope=server
+      cache_to:
+        - type=gha,mode=max,scope=server
+
+  mock-clark:
+    build:
+      cache_from:
+        - type=gha,scope=mock-clark
+      cache_to:
+        - type=gha,mode=max,scope=mock-clark
