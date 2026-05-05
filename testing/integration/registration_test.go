@@ -15,6 +15,7 @@ func isRegistrationSubmitted(status int) bool {
 // TestRegistrationFlow_BasicRegistration creates an event, registers a user,
 // and verifies the registration is accepted by the Kafka consumer.
 func TestRegistrationFlow_BasicRegistration(t *testing.T) {
+	t.Parallel()
 	eventID := createEvent(t, "admin-basic-reg", defaultEvent("Basic Registration Test", 100))
 
 	status, requestID := registerForEvent(eventID, "user-basic-reg", "Alice Smith", "alice@example.com")
@@ -37,6 +38,7 @@ func TestRegistrationFlow_BasicRegistration(t *testing.T) {
 // TestRegistrationFlow_DuplicateRegistration verifies that registering the same
 // user for the same event twice is rejected with 409.
 func TestRegistrationFlow_DuplicateRegistration(t *testing.T) {
+	t.Parallel()
 	eventID := createEvent(t, "admin-dup-reg", defaultEvent("Duplicate Registration Test", 100))
 
 	// first registration
@@ -60,6 +62,7 @@ func TestRegistrationFlow_DuplicateRegistration(t *testing.T) {
 // TestRegistrationFlow_CapacityFull creates an event with capacity 1, fills it,
 // then verifies a second user's registration is rejected as capacity_full.
 func TestRegistrationFlow_CapacityFull(t *testing.T) {
+	t.Parallel()
 	eventID := createEvent(t, "admin-cap-full", defaultEvent("Capacity Full Test", 1))
 
 	// register first user — should be accepted

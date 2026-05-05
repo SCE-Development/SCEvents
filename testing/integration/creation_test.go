@@ -12,6 +12,7 @@ import (
 // TestEventCreationFlow_CreateAndRetrieve creates an event and verifies it can be
 // fetched back with matching fields.
 func TestEventCreationFlow_CreateAndRetrieve(t *testing.T) {
+	t.Parallel()
 	body := defaultEvent("Create And Retrieve Test", 50)
 	eventID := createEvent(t, "admin-create-retrieve", body)
 
@@ -42,6 +43,7 @@ func TestEventCreationFlow_CreateAndRetrieve(t *testing.T) {
 // TestEventCreationFlow_Update creates an event, patches the name and location,
 // then verifies the updated values are returned.
 func TestEventCreationFlow_Update(t *testing.T) {
+	t.Parallel()
 	eventID := createEvent(t, "admin-update", defaultEvent("Update Test Original", 50))
 
 	patch, _ := json.Marshal(map[string]interface{}{
@@ -83,6 +85,7 @@ func TestEventCreationFlow_Update(t *testing.T) {
 // TestEventCreationFlow_Delete creates an event, deletes it, and verifies a
 // subsequent GET returns 404. Only draft or closed events may be deleted (see DeleteEventByID).
 func TestEventCreationFlow_Delete(t *testing.T) {
+	t.Parallel()
 	body := defaultEvent("Delete Test", 50)
 	body["status"] = "draft"
 	eventID := createEvent(t, "admin-delete", body)
