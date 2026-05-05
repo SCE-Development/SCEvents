@@ -7,7 +7,32 @@ on:
     branches: [main]
 
 jobs:
+  detect-integration-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Detect integration-impacting changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            should_run:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - 'docker-compose.yml'
+              - 'docker-compose.dev.yml'
+              - 'testing/integration/**'
+              - 'testing/Makefile'
+              - 'Makefile'
+              - '.github/workflows/integration.yml'
+
   integration:
+    needs: detect-integration-changes
+    if: ${{ needs.detect-integration-changes.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -31,3 +56,32 @@ jobs:
       - name: Tear down Compose
         if: always()
         run: make teardown-integration
+
+  integration-skipped:
+    needs: detect-integration-changes
+    if: ${{ needs.detect-integration-changes.outputs.should_run != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Integration skipped by path filter
+        run: echo "No integration-impacting files changed. Skipping integration tests."
+
+  integration-pipeline-status:
+    needs: [detect-integration-changes, integration, integration-skipped]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check integration outcome
+        run: |
+          if [[ "${{ needs.detect-integration-changes.outputs.should_run }}" == "true" ]]; then
+            if [[ "${{ needs.integration.result }}" != "success" ]]; then
+              echo "Integration tests were required and did not pass."
+              exit 1
+            fi
+            echo "Integration tests passed."
+          else
+            if [[ "${{ needs.integration-skipped.result }}" != "success" ]]; then
+              echo "Integration skip marker job failed."
+              exit 1
+            fi
+            echo "Integration tests intentionally skipped."
+          fi
