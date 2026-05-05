@@ -1,7 +1,5 @@
 # Testing Guide
 
-## Usage
-
 To run integration tests:
 
 ```bash
