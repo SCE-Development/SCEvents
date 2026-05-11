@@ -7,13 +7,11 @@ on:
     branches: [ "main", "master" ]
 
 jobs:
-  detect-lint-changes:
+  lint-code:
     runs-on: ubuntu-latest
-    outputs:
-      should_run: ${{ steps.filter.outputs.should_run }}
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
       - name: Detect lint-impacting changes
         id: filter
         uses: dorny/paths-filter@v3
@@ -29,51 +27,16 @@ jobs:
               - '.golangci.toml'
               - '.golangci.json'
 
-  lint:
-    name: lint-code
-    needs: detect-lint-changes
-    if: ${{ needs.detect-lint-changes.outputs.should_run == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
       - name: Set up Go
+        if: steps.filter.outputs.should_run == 'true'
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
-          cache: false # golangci-lint-action handles its own caching
+          cache: false
 
       - name: golangci-lint
+        if: steps.filter.outputs.should_run == 'true'
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.11.4
           args: --timeout=5m
-
-  lint-skipped:
-    needs: detect-lint-changes
-    if: ${{ needs.detect-lint-changes.outputs.should_run != 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Lint skipped by path filter
-        run: echo "No lint-impacting files changed. Skipping golangci-lint."
-
-  lint-pipeline-status:
-    needs: [detect-lint-changes, lint, lint-skipped]
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check lint outcome
-        run: |
-          if [[ "${{ needs.detect-lint-changes.outputs.should_run }}" == "true" ]]; then
-            if [[ "${{ needs.lint.result }}" != "success" ]]; then
-              echo "Lint was required and did not pass."
-              exit 1
-            fi
-            echo "Lint passed."
-          else
-            if [[ "${{ needs.lint-skipped.result }}" != "success" ]]; then
-              echo "Lint skip marker job failed."
-              exit 1
-            fi
-            echo "Lint intentionally skipped."
-          fi

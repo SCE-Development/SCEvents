@@ -7,13 +7,12 @@ on:
     branches: [main]
 
 jobs:
-  detect-go-ci-changes:
+  verify-and-build:
     runs-on: ubuntu-latest
-    outputs:
-      should_run: ${{ steps.filter.outputs.should_run }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
       - name: Detect Go CI-impacting changes
         id: filter
         uses: dorny/paths-filter@v3
@@ -26,61 +25,28 @@ jobs:
               - 'vendor/**'
               - '.github/workflows/go-ci.yml'
 
-  verify-and-build:
-    needs: detect-go-ci-changes
-    if: ${{ needs.detect-go-ci-changes.outputs.should_run == 'true' }}
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
       - name: Set up Go
+        if: steps.filter.outputs.should_run == 'true'
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Download dependencies
+        if: steps.filter.outputs.should_run == 'true'
         run: go mod download
 
       - name: Verify dependencies are synced
+        if: steps.filter.outputs.should_run == 'true'
         run: |
           go mod tidy
           go mod vendor
           git diff --exit-code -- go.mod go.sum
 
       - name: Build all packages
+        if: steps.filter.outputs.should_run == 'true'
         run: go build ./...
 
       - name: Run unit tests
+        if: steps.filter.outputs.should_run == 'true'
         run: go test ./...
-
-  go-ci-skipped:
-    needs: detect-go-ci-changes
-    if: ${{ needs.detect-go-ci-changes.outputs.should_run != 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Go CI skipped by path filter
-        run: echo "No Go CI-impacting files changed. Skipping build and unit tests."
-
-  golang-validation-pipeline-status:
-    needs: [detect-go-ci-changes, verify-and-build, go-ci-skipped]
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check Go CI outcome
-        run: |
-          if [[ "${{ needs.detect-go-ci-changes.outputs.should_run }}" == "true" ]]; then
-            if [[ "${{ needs.verify-and-build.result }}" != "success" ]]; then
-              echo "Go validation was required and did not pass."
-              exit 1
-            fi
-            echo "Go validation passed."
-          else
-            if [[ "${{ needs.go-ci-skipped.result }}" != "success" ]]; then
-              echo "Go CI skip marker job failed."
-              exit 1
-            fi
-            echo "Go validation intentionally skipped."
-          fi

@@ -7,13 +7,15 @@ on:
     branches: [main]
 
 jobs:
-  detect-integration-changes:
+  integration:
     runs-on: ubuntu-latest
-    outputs:
-      should_run: ${{ steps.filter.outputs.should_run }}
+    timeout-minutes: 30
+    env:
+      INTEGRATION_READY_TIMEOUT: 120s
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
       - name: Detect integration-impacting changes
         id: filter
         uses: dorny/paths-filter@v3
@@ -30,58 +32,17 @@ jobs:
               - 'Makefile'
               - '.github/workflows/integration.yml'
 
-  integration:
-    needs: detect-integration-changes
-    if: ${{ needs.detect-integration-changes.outputs.should_run == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      # Compose can be slow on runners (Kafka + topic init + server build)
-      INTEGRATION_READY_TIMEOUT: 120s
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
       - name: Set up Go
+        if: steps.filter.outputs.should_run == 'true'
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
-      # make integration = docker compose up + go test -tags=integration (see testing/Makefile)
       - name: Run integration tests
+        if: steps.filter.outputs.should_run == 'true'
         run: make integration
 
       - name: Tear down Compose
-        if: always()
+        if: always() && steps.filter.outputs.should_run == 'true'
         run: make teardown-integration
-
-  integration-skipped:
-    needs: detect-integration-changes
-    if: ${{ needs.detect-integration-changes.outputs.should_run != 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Integration skipped by path filter
-        run: echo "No integration-impacting files changed. Skipping integration tests."
-
-  integration-pipeline-status:
-    needs: [detect-integration-changes, integration, integration-skipped]
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check integration outcome
-        run: |
-          if [[ "${{ needs.detect-integration-changes.outputs.should_run }}" == "true" ]]; then
-            if [[ "${{ needs.integration.result }}" != "success" ]]; then
-              echo "Integration tests were required and did not pass."
-              exit 1
-            fi
-            echo "Integration tests passed."
-          else
-            if [[ "${{ needs.integration-skipped.result }}" != "success" ]]; then
-              echo "Integration skip marker job failed."
-              exit 1
-            fi
-            echo "Integration tests intentionally skipped."
-          fi
