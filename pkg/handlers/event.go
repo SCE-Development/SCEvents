@@ -678,6 +678,16 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			return
 		}
 
+		if ev.MaxAttendees != -1 {
+			remaining, err := h.stores.Redis.GetEventHeadcount(c.Request.Context(), eventID)
+			if err == nil && remaining <= 0 {
+				c.JSON(http.StatusConflict, gin.H{
+					"error": "event is at capacity",
+				})
+				return
+			}
+		}
+
 		if ev.IsListedAdmin(payload.Registrant.UserID) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error": "event admins cannot register for their own event",
@@ -723,45 +733,16 @@ func (h *EventHandler) RegisterForEvent(producer *registration.Producer) gin.Han
 			return
 		}
 
-		// Capacity handling:
-		// Events with max_attendees == -1 are treated as unlimited and are NOT tracked in Redis
-		// Therefore, skip Redis seat reservation entirely for unlimited events
-		// For limited events, use Redis to atomically reserve a seat to avoid race conditions
-		// under concurrent registrations
-		seatTaken := true
-		if ev.MaxAttendees != -1 {
-			seatTaken, err = h.stores.Redis.TryTakeEventSeat(c.Request.Context(), eventID)
-			if err != nil {
-				_ = h.stores.Mongo.MarkRegistrationRejected(c.Request.Context(), created.RequestID, models.ReasonInternalError)
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": "failed to reserve event seat",
-				})
-				return
-			}
-			if !seatTaken {
-				_ = h.stores.Mongo.MarkRegistrationRejected(c.Request.Context(), created.RequestID, models.ReasonCapacityFull)
-				c.JSON(http.StatusConflict, gin.H{
-					"error": "event is full",
-				})
-				return
-			}
-		}
-
-		if err := h.stores.Mongo.MarkRegistrationAccepted(c.Request.Context(), created.RequestID); err != nil {
-			// Only release a Redis seat if this event is capacity-limited
-			// Unlimited events do not have a Redis headcount entry
-			if ev.MaxAttendees != -1 && seatTaken {
-				_ = h.stores.Redis.ReleaseEventSeat(c.Request.Context(), eventID)
-			}
+		if err := producer.PublishRegistration(c.Request.Context(), created.RequestID, eventID, payload.Registrant.UserID); err != nil {
 			_ = h.stores.Mongo.MarkRegistrationRejected(c.Request.Context(), created.RequestID, models.ReasonInternalError)
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "failed to send registration request",
+				"error": "failed to enqueue registration request",
 			})
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{
-			"message":    "registration request sent",
+		c.JSON(http.StatusAccepted, gin.H{
+			"message":    "registration request received",
 			"event_id":   eventID,
 			"request_id": created.RequestID,
 		})
