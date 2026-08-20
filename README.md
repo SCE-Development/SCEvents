@@ -1,6 +1,8 @@
 # SCEvents
 Welcome to SCE's event planner platform!
 
+**New to the project?** Start with [ONBOARDING.md](ONBOARDING.md).
+
 ## Local Setup (requires Docker)
 
 ### 1. Clone the repository
